@@ -1,0 +1,23 @@
+const express = require('express');
+const userRoutes = require('./routes/user.routes');
+const appConstantRoutes = require('./routes/appconstant.routes');
+const inventoryRoutes = require('./routes/inventory.routes');
+require('dotenv').config();
+
+const app = express();
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Routes
+app.use('/api/users', userRoutes);
+app.use('/api/appconstant', appConstantRoutes);
+app.use('/api/inventory', inventoryRoutes);
+
+// Health check
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', message: 'Server is running' });
+});
+
+module.exports = app;
