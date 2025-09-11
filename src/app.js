@@ -2,6 +2,7 @@ const express = require('express');
 const userRoutes = require('./routes/user.routes');
 const appConstantRoutes = require('./routes/appconstant.routes');
 const inventoryRoutes = require('./routes/inventory.routes');
+const adSalesAdSpendRoutes = require('./routes/adsalesadspend.routes');
 require('dotenv').config();
 
 const app = express();
@@ -14,6 +15,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/users', userRoutes);
 app.use('/api/appconstant', appConstantRoutes);
 app.use('/api/inventory', inventoryRoutes);
+app.use('/api/adsalesadspend', adSalesAdSpendRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
