@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 exports.getInventoryByDatabase = async (req, res) => {
   try {
     const { databaseName } = req.params;
+    const { sku, category, product, country, platform } = req.query;
 
     // Create dynamic connection to the specified database
     console.log('Database name:', databaseName);
@@ -32,8 +33,16 @@ exports.getInventoryByDatabase = async (req, res) => {
     const InventorySchema = new mongoose.Schema({}, { strict: false });
     const Inventory = dynamicConnection.model("Inventory", InventorySchema, "inventory");
 
-    // Get all inventory data without any filters
-    const inventoryData = await Inventory.find({});
+    // Build filter object based on query params
+    const filter = {};
+    if (sku) filter.sku = sku;
+    if (category) filter.product_category = category;
+    if (product) filter.product_name = product;
+    if (country) filter.country = country;
+    if (platform) filter.platform = platform;
+
+    // Get filtered inventory data
+    const inventoryData = await Inventory.find(filter);
 
     console.log('Total inventory items found:', inventoryData.length);
 
@@ -47,14 +56,17 @@ exports.getInventoryByDatabase = async (req, res) => {
       totalValue += Number(item.total_value || item.value) || 0;
     });
 
-    // Return all inventory data
+    // Return filtered inventory data
     res.json({
       success: true,
       message: 'Inventory data retrieved successfully',
-      totalItems,
-      totalQuantity,
-      totalValue,
-      data: inventoryData
+  
+      data:{ 
+            totalItems,
+      //totalQuantity,
+      //totalValue,
+        
+        inventoryData}
     });
 
   } catch (error) {
