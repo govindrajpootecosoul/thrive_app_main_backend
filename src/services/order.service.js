@@ -1,5 +1,196 @@
 const mongoose = require('mongoose');
 
+exports.getOrderListByDatabase = async (req, res) => {
+  try {
+    const { databaseName } = req.params;
+    const {
+      sku,
+      product_category,
+      product_name,
+      platform,
+      country,
+      filterType = "currentmonth",
+      fromDate,
+      toDate,
+      startMonth,
+      endMonth
+    } = req.query;
+
+    // Create dynamic connection to the specified database
+    console.log('Database name:', databaseName);
+
+    // More flexible database name replacement
+    let dynamicUri = process.env.MONGODB_URI;
+    if (dynamicUri.includes('/main_db?')) {
+      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
+    } else if (dynamicUri.includes('/main_db/')) {
+      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
+    } else {
+      // If no main_db found, try to replace the last database name in the URI
+      const uriParts = dynamicUri.split('/');
+      if (uriParts.length > 3) {
+        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
+        dynamicUri = uriParts.join('/');
+      }
+    }
+
+    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
+    const dynamicConnection = mongoose.createConnection(dynamicUri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+
+    // Define temporary model
+    const OrderSchema = new mongoose.Schema({}, { strict: false });
+    const Order = dynamicConnection.model("Order", OrderSchema, "orders");
+
+    const today = new Date();
+    console.log('Today\'s date:', today.toISOString());
+
+    let currentStartDate, currentEndDate;
+
+    // Use UTC for consistent date handling
+    const currentYear = today.getUTCFullYear();
+    const currentMonth = today.getUTCMonth();
+
+    // Helper function to parse MM-YYYY format
+    const parseMonthYear = (monthYearStr) => {
+      if (!monthYearStr || !monthYearStr.includes('-')) return null;
+      const [month, year] = monthYearStr.split('-').map(s => parseInt(s.trim()));
+      if (isNaN(month) || isNaN(year) || month < 1 || month > 12) return null;
+      return { month: month - 1, year }; // month is 0-indexed in JS Date
+    };
+
+    // Filter ranges
+    if (startMonth && endMonth) {
+      // Custom range: MM-YYYY to MM-YYYY
+      const startParsed = parseMonthYear(startMonth);
+      const endParsed = parseMonthYear(endMonth);
+
+      if (startParsed && endParsed) {
+        currentStartDate = new Date(Date.UTC(startParsed.year, startParsed.month, 1));
+        currentEndDate = new Date(Date.UTC(endParsed.year, endParsed.month + 1, 0, 23, 59, 59, 999));
+      } else {
+        // Invalid format, fallback to current month
+        currentStartDate = new Date(Date.UTC(currentYear, currentMonth, 1));
+        currentEndDate = new Date(Date.UTC(currentYear, currentMonth + 1, 0, 23, 59, 59, 999));
+      }
+    } else if (fromDate && toDate) {
+      // Direct date range
+      currentStartDate = new Date(fromDate);
+      currentEndDate = new Date(toDate);
+      currentEndDate.setHours(23, 59, 59, 999);
+    } else {
+      switch (filterType) {
+        case "currentmonth": {
+          // Current month: from 1st to last day of current month
+          currentStartDate = new Date(Date.UTC(currentYear, currentMonth, 1));
+          currentEndDate = new Date(Date.UTC(currentYear, currentMonth + 1, 0, 23, 59, 59, 999));
+          break;
+        }
+        case "previousmonth": {
+          // Previous month: full previous month
+          const previousMonth = currentMonth - 1;
+          const previousYear = previousMonth < 0 ? currentYear - 1 : currentYear;
+          const adjustedPrevMonth = (previousMonth + 12) % 12;
+          currentStartDate = new Date(Date.UTC(previousYear, adjustedPrevMonth, 1));
+          currentEndDate = new Date(Date.UTC(previousYear, adjustedPrevMonth + 1, 0, 23, 59, 59, 999));
+          break;
+        }
+        case "currentyear": {
+          // Current year: from Jan 1st to Dec 31st of current year
+          currentStartDate = new Date(Date.UTC(currentYear, 0, 1)); // January 1st
+          currentEndDate = new Date(Date.UTC(currentYear, 11, 31, 23, 59, 59, 999)); // December 31st
+          break;
+        }
+        case "6months":
+        default: {
+          currentStartDate = new Date(Date.UTC(currentYear, currentMonth - 5, 1));
+          currentEndDate = new Date(Date.UTC(currentYear, currentMonth + 1, 0, 23, 59, 59, 999));
+          break;
+        }
+      }
+    }
+
+    // Build filter object
+    const filter = {};
+    if (sku) filter.sku = sku;
+    if (product_category) filter.product_category = product_category;
+    if (product_name) filter.product_name = product_name;
+    if (platform) filter.platform = { $regex: platform, $options: 'i' };
+    if (country) filter.country = { $regex: country, $options: 'i' };
+
+    // Date filter using the calculated date range - handle both string and Date formats
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    // Generate combined regex pattern for all months and years in the current period
+    const generateCombinedRegex = (startDate, endDate) => {
+      const monthYearPatterns = [];
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      let current = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
+
+      while (current <= end) {
+        const year = current.getUTCFullYear();
+        const month = current.getUTCMonth();
+        const monthName = monthNames[month];
+        monthYearPatterns.push(`${monthName}-${year}`);
+        current.setUTCMonth(current.getUTCMonth() + 1);
+      }
+
+      // Create combined regex pattern: ^\d{1,2}-(Aug-2025|Sep-2025|Oct-2025)$
+      const monthYearGroup = monthYearPatterns.join('|');
+      return new RegExp(`^\\d{1,2}-(${monthYearGroup})$`);
+    };
+
+    const currentRegex = generateCombinedRegex(currentStartDate, currentEndDate);
+    filter.$or = [
+      { purchase_date: { $regex: currentRegex } }
+    ];
+
+    // Get orders data
+    const orders = await Order.find(filter);
+
+    // Group by sku
+    const groupedData = {};
+    orders.forEach(order => {
+      const key = order.sku;
+      if (!groupedData[key]) {
+        groupedData[key] = {
+          sku: order.sku,
+          product_name: order.product_name,
+          product_category: order.product_category,
+          sold_qty: 0,
+          revenue: 0,
+          purchase_date: order.purchase_date
+        };
+      }
+      groupedData[key].sold_qty += Number(order.quantity) || 0;
+      groupedData[key].revenue += Number(order.total_sales) || 0;
+
+      // Update to latest purchase_date if current one is newer
+      if (new Date(order.purchase_date) > new Date(groupedData[key].purchase_date)) {
+        groupedData[key].purchase_date = order.purchase_date;
+      }
+    });
+
+    // Convert to array and sort by purchase_date descending (latest first)
+    const skudata = Object.values(groupedData).sort((a, b) => new Date(b.purchase_date) - new Date(a.purchase_date));
+
+    res.json({
+      success: true,
+      message: 'Order list retrieved successfully',
+      data: {skudata}
+    });
+
+  } catch (error) {
+    console.error('Order list service error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+
 exports.getOrdersByDatabase = async (req, res) => {
   try {
     const {
@@ -148,10 +339,10 @@ exports.getOrdersByDatabase = async (req, res) => {
 
     // Filters
     if (sku) query.SKU = { $in: sku.split(",").map(s => s.trim()) };
-    if (platform) query.platform = platform;
+    if (platform) query.platform = { $regex: platform, $options: 'i' };
     if (state) query.state = state;
     if (city) query.city = city;
-    if (country) query.country = country;
+    if (country) query.country = { $regex: country, $options: 'i' };
 
     console.log('Final query:', JSON.stringify(query, null, 2));
     console.log('Date range:', { currentStartDate, currentEndDate });
@@ -328,6 +519,57 @@ exports.getOrdersByDatabase = async (req, res) => {
 
   } catch (error) {
     console.error('Order service error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.getDropdownData = async (req, res) => {
+  try {
+    const { databaseName } = req.params;
+
+    // Create dynamic connection to the specified database
+    console.log('Database name for dropdown:', databaseName);
+
+    // More flexible database name replacement
+    let dynamicUri = process.env.MONGODB_URI;
+    if (dynamicUri.includes('/main_db?')) {
+      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
+    } else if (dynamicUri.includes('/main_db/')) {
+      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
+    } else {
+      // If no main_db found, try to replace the last database name in the URI
+      const uriParts = dynamicUri.split('/');
+      if (uriParts.length > 3) {
+        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
+        dynamicUri = uriParts.join('/');
+      }
+    }
+
+    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
+    const dynamicConnection = mongoose.createConnection(dynamicUri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+
+    // Define temporary model
+    const OrderSchema = new mongoose.Schema({}, { strict: false });
+    const Order = dynamicConnection.model("Order", OrderSchema, "orders");
+
+    // Get distinct SKUs
+    const skuList = await Order.distinct('sku');
+    const categoryList = await Order.distinct('product_category');
+
+    res.json({
+      success: true,
+      message: 'Dropdown data retrieved successfully',
+      data: {
+        skuList: skuList.filter(sku => sku), // Filter out null/undefined
+        categoryList: categoryList.filter(category => category) // Filter out null/undefined
+      }
+    });
+
+  } catch (error) {
+    console.error('Dropdown service error:', error);
     res.status(500).json({ error: error.message });
   }
 };
