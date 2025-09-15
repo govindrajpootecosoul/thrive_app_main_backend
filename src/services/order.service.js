@@ -526,6 +526,7 @@ exports.getOrdersByDatabase = async (req, res) => {
 exports.getDropdownData = async (req, res) => {
   try {
     const { databaseName } = req.params;
+    const { platform, country } = req.query;
 
     // Create dynamic connection to the specified database
     console.log('Database name for dropdown:', databaseName);
@@ -555,9 +556,14 @@ exports.getDropdownData = async (req, res) => {
     const OrderSchema = new mongoose.Schema({}, { strict: false });
     const Order = dynamicConnection.model("Order", OrderSchema, "orders");
 
-    // Get distinct SKUs
-    const skuList = await Order.distinct('sku');
-    const categoryList = await Order.distinct('product_category');
+    // Build filter object for platform and country
+    const filter = {};
+    if (platform) filter.platform = { $regex: platform, $options: 'i' };
+    if (country) filter.country = { $regex: country, $options: 'i' };
+
+    // Get distinct SKUs with filters
+    const skuList = await Order.distinct('sku', filter);
+    const categoryList = await Order.distinct('product_category', filter);
 
     res.json({
       success: true,
