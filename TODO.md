@@ -1,3 +1,6 @@
 - [x] Install cors package using npm install cors
 - [x] Update src/app.js to require and use cors middleware
 - [x] Run npm install to ensure dependencies are installed
+- [x] Add getPnlDropdownData function to pnl.service.js
+- [x] Add getPnlDropdownData export to pnl.controller.js
+- [x] Add pnldropdown route to pnl.routes.js

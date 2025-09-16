@@ -299,3 +299,69 @@ exports.getPnlExecutiveData = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+exports.getPnlDropdownData = async (req, res) => {
+  try {
+    const { databaseName } = req.params;
+
+    // Create dynamic connection to the specified database
+    console.log('Database name for PNL Dropdown data:', databaseName);
+
+    // More flexible database name replacement
+    let dynamicUri = process.env.MONGODB_URI;
+    if (dynamicUri.includes('/main_db?')) {
+      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
+    } else if (dynamicUri.includes('/main_db/')) {
+      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
+    } else {
+      // If no main_db found, try to replace the last database name in the URI
+      const uriParts = dynamicUri.split('/');
+      if (uriParts.length > 3) {
+        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
+        dynamicUri = uriParts.join('/');
+      }
+    }
+
+    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
+    const dynamicConnection = mongoose.createConnection(dynamicUri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+
+    // Define temporary model
+    const PnlSchema = new mongoose.Schema({}, { strict: false });
+    const Pnl = dynamicConnection.model("Pnl", PnlSchema, "pnl");
+
+    // Aggregation pipeline to get distinct values
+    const aggregationPipeline = [
+      {
+        $group: {
+          _id: null,
+          skuList: { $addToSet: "$sku" },
+          categoryList: { $addToSet: "$product_category" },
+          productNameList: { $addToSet: "$product_name" }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          skuList: 1,
+          categoryList: 1,
+          productNameList: 1
+        }
+      }
+    ];
+
+    const dropdownData = await Pnl.aggregate(aggregationPipeline);
+
+    res.json({
+      success: true,
+      message: 'PNL Dropdown data retrieved successfully',
+      data: dropdownData.length > 0 ? dropdownData[0] : { skuList: [], categoryList: [], productNameList: [] }
+    });
+
+  } catch (error) {
+    console.error('PNL Dropdown service error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
