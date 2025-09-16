@@ -34,7 +34,10 @@ exports.getInventoryExecutiveData = async (req, res) => {
     const Inventory = dynamicConnection.model("Inventory", InventorySchema, "inventory");
 
     // Build filter object (optional: add filters if needed)
+    const { country, platform } = req.query;
     const filter = {};
+    if (country) filter.country = { $regex: country, $options: 'i' };
+    if (platform) filter.platform = { $regex: platform, $options: 'i' };
 
     // Aggregation pipeline to sum required fields and calculate active sku count
     const aggregationPipeline = [
