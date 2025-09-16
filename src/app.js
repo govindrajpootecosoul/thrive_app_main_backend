@@ -7,9 +7,12 @@ const orderRoutes = require('./routes/order.routes');
 const pnlRoutes = require('./routes/pnl.routes');
 require('dotenv').config();
 
+const cors = require('cors');
+
 const app = express();
 
 // Middleware
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
