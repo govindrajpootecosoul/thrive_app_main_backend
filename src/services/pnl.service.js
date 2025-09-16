@@ -125,8 +125,56 @@ exports.getPnlData = async (req, res) => {
     console.log('PNL filter:', filter);
     console.log('PNL sort:', sortQuery);
 
-    // Query MongoDB
-    const pnlData = await Pnl.find(filter).sort(sortQuery);
+    // Aggregation pipeline to group by sku and sum data
+    const aggregationPipeline = [
+      { $match: filter },
+      {
+        $group: {
+          _id: "$sku",
+          sku: { $first: "$sku" },
+          product_name: { $first: "$product_name" },
+          product_category: { $first: "$product_category" },
+          country: { $first: "$country" },
+          platform: { $first: "$platform" },
+          year_month: { $first: "$year_month" },
+          ad_cost: { $sum: "$ad_cost" },
+          deal_fee: { $sum: "$deal_fee" },
+          fba_inventory_fee: { $sum: "$fba_inventory_fee" },
+          fba_reimbursement: { $sum: "$fba_reimbursement" },
+          liquidations: { $sum: "$liquidations" },
+          net_sales: { $sum: "$net_sales" },
+          net_sales_with_tax: { $sum: "$net_sales_with_tax" },
+          other_marketing_expenses: { $sum: "$other_marketing_expenses" },
+          storage_fee: { $sum: "$storage_fee" },
+          total_return_with_tax: { $sum: "$total_return_with_tax" },
+          total_sales: { $sum: "$total_sales" },
+          total_sales_with_tax: { $sum: "$total_sales_with_tax" },
+          total_units: { $sum: "$total_units" },
+          total_return_amount: { $sum: "$total_return_amount" },
+          fba_fees: { $sum: "$fba_fees" },
+          promotional_rebates: { $sum: "$promotional_rebates" },
+          quantity: { $sum: "$quantity" },
+          refund_quantity: { $sum: "$refund_quantity" },
+          selling_fees: { $sum: "$selling_fees" },
+          spend: { $sum: "$spend" },
+          product_cogs: { $sum: "$product_cogs" },
+          cogs: { $sum: "$cogs" },
+          cm1: { $sum: "$cm1" },
+          heads_cm2: { $sum: "$heads_cm2" },
+          cm2: { $sum: "$cm2" },
+          heads_cm3: { $sum: "$heads_cm3" },
+          cm3: { $sum: "$cm3" }
+        }
+      }
+    ];
+
+    // Add sort stage only if sortQuery is not empty
+    if (Object.keys(sortQuery).length > 0) {
+      aggregationPipeline.push({ $sort: sortQuery });
+    }
+
+    // Query MongoDB with aggregation
+    const pnlData = await Pnl.aggregate(aggregationPipeline);
 
     console.log('Total PNL records found:', pnlData.length);
 
