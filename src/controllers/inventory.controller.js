@@ -62,3 +62,13 @@ exports.getInventoryStockStatusCounts = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+exports.getInventoryExecutiveData = async (req, res) => {
+  try {
+    const inventoryExecutiveService = require('../services/inventoryExecutive.service');
+    await inventoryExecutiveService.getInventoryExecutiveData(req, res);
+  } catch (error) {
+    console.error('Inventory executive controller error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};

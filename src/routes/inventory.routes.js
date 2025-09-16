@@ -23,4 +23,7 @@ router.get('/:databaseName/count-summary', inventoryController.getInventoryCount
 // New route for stock status counts
 router.get('/:databaseName/stock-status-counts', inventoryController.getInventoryStockStatusCounts);
 
+// New route for inventory executive data
+router.get('/:databaseName/executive-data', inventoryController.getInventoryExecutiveData);
+
 module.exports = router;
