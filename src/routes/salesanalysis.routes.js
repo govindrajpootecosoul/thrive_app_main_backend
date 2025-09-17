@@ -14,6 +14,8 @@ router.get('/categories-list', salesanalysisController.getCategoriesList);
 router.get('/product-names', salesanalysisController.getProductNames);
 router.get('/states', salesanalysisController.getStates);
 router.get('/cities/:state', salesanalysisController.getCitiesByState);
+router.get('/states-list', salesanalysisController.getStatesList);
+router.get('/cities-list', salesanalysisController.getCitiesList);
 router.get('/compare', salesanalysisController.getSalesComparison);
 
 // Advertising Data Query Endpoint

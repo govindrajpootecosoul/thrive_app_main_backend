@@ -1,3 +1,4 @@
+
 const salesanalysisService = require('../services/salesanalysis.service');
 
 exports.getSalesData = async (req, res) => {
@@ -59,6 +60,24 @@ exports.getCitiesByState = async (req, res) => {
     await salesanalysisService.getCitiesByState(req, res);
   } catch (error) {
     console.error('Cities by state controller error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.getStatesList = async (req, res) => {
+  try {
+    await salesanalysisService.getStatesList(req, res);
+  } catch (error) {
+    console.error('States list controller error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.getCitiesList = async (req, res) => {
+  try {
+    await salesanalysisService.getCitiesList(req, res);
+  } catch (error) {
+    console.error('Cities list controller error:', error);
     res.status(500).json({ error: error.message });
   }
 };
