@@ -127,7 +127,7 @@ exports.getOrderListByDatabase = async (req, res) => {
         default: {
           return res.status(400).json({
             status: 400,
-            details: "Provide a valid filterType such as currentmonth, previousmonth, currentyear, or lastyear.",
+            message: "Provide a valid filterType such as currentmonth, previousmonth, currentyear, or lastyear.",
             success: false,
             data: {
               code: "BAD_REQUEST",

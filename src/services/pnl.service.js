@@ -77,13 +77,13 @@ exports.getPnlData = async (req, res) => {
       yearMonthFilter.push(date);
     } else if (range) {
       switch (range) {
-        case 'currentmonths':
+        case 'currentmonth':
           yearMonthFilter.push(now.format('YYYY-MM'));
           break;
-        case 'lastmonth':
+        case 'previousmonth':
           yearMonthFilter.push(now.subtract(1, 'month').format('YYYY-MM'));
           break;
-        case 'yeartodate':
+        case 'currentyear':
           const currentYear = now.year();
           const currentMonth = now.month() + 1; // moment months are 0-based
           for (let month = 1; month <= currentMonth; month++) {
@@ -99,7 +99,9 @@ exports.getPnlData = async (req, res) => {
         default:
           return res.status(400).json({
             status: 400,
-            error: {
+             message: "Provide a valid range parameter such as currentmonths, lastmonth, yeartodate, or lastyear.",
+             success: false,
+            data: {
               code: "BAD_REQUEST",
               message: `Invalid range: ${range}`,
               details: "Provide a valid range parameter such as currentmonths, lastmonth, yeartodate, or lastyear."
@@ -293,13 +295,13 @@ exports.getPnlExecutiveData = async (req, res) => {
       yearMonthFilter.push(date);
     } else if (range) {
       switch (range) {
-        case 'currentmonths':
+        case 'currentmonth':
           yearMonthFilter.push(now.format('YYYY-MM'));
           break;
-        case 'lastmonth':
+        case 'previousmonth':
           yearMonthFilter.push(now.subtract(1, 'month').format('YYYY-MM'));
           break;
-        case 'yeartodate':
+        case 'currentyear':
           const currentYear = now.year();
           const currentMonth = now.month() + 1; // moment months are 0-based
           for (let month = 1; month <= currentMonth; month++) {
@@ -409,6 +411,7 @@ exports.getPnlExecutiveData = async (req, res) => {
 exports.getPnlDropdownData = async (req, res) => {
   try {
     const { databaseName } = req.params;
+    const { country, platform } = req.query;
 
     // Create dynamic connection to the specified database
     console.log('Database name for PNL Dropdown data:', databaseName);
@@ -438,32 +441,58 @@ exports.getPnlDropdownData = async (req, res) => {
     const PnlSchema = new mongoose.Schema({}, { strict: false });
     const Pnl = dynamicConnection.model("Pnl", PnlSchema, "pnl");
 
+    // Build match filter based on country and platform if provided
+    const matchFilter = {};
+    if (country && country.trim() !== '') {
+      matchFilter.country = country;
+    }
+    if (platform && platform.trim() !== '') {
+      matchFilter.platform = platform;
+    }
+
     // Aggregation pipeline to get distinct values
-    const aggregationPipeline = [
-      {
-        $group: {
-          _id: null,
-          skuList: { $addToSet: "$sku" },
-          categoryList: { $addToSet: "$product_category" },
-          productNameList: { $addToSet: "$product_name" }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          skuList: 1,
-          categoryList: 1,
-          productNameList: 1
-        }
+    const aggregationPipeline = [];
+
+    if (Object.keys(matchFilter).length > 0) {
+      aggregationPipeline.push({ $match: matchFilter });
+    }
+
+    aggregationPipeline.push({
+      $group: {
+        _id: null,
+        skuList: { $addToSet: "$sku" },
+        categoryList: { $addToSet: "$product_category" },
+        productNameList: { $addToSet: "$product_name" },
+        countryList: { $addToSet: "$country" },
+        platformList: { $addToSet: "$platform" }
       }
-    ];
+    });
+
+    aggregationPipeline.push({
+      $project: {
+        _id: 0,
+        skuList: 1,
+        categoryList: 1,
+        productNameList: 1,
+        countryList: 1,
+        platformList: 1
+      }
+    });
 
     const dropdownData = await Pnl.aggregate(aggregationPipeline);
+
+    if (dropdownData.length === 0) {
+      return res.json({
+        success: false,
+        message: 'No data found matching the provided filters',
+        data: { skuList: [], categoryList: [], productNameList: [], countryList: [], platformList: [] }
+      });
+    }
 
     res.json({
       success: true,
       message: 'PNL Dropdown data retrieved successfully',
-      data: dropdownData.length > 0 ? dropdownData[0] : { skuList: [], categoryList: [], productNameList: [] }
+      data: dropdownData[0]
     });
 
   } catch (error) {

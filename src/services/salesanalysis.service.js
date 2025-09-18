@@ -12,7 +12,7 @@ exports.getSalesData = async (req, res) => {
       purchaseHour,
       startDate,
       endDate,
-      filterType = "lastmonth",
+      filterType = "previousmonth",
       country,
       platform
     } = req.query;
@@ -222,7 +222,7 @@ exports.getRegionalSales = async (req, res) => {
           prevStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
           prevEndDate = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
           break;
-        case "lastmonth":
+        case "previousmonth":
           const lastMonth = currentMonth - 1;
           const lastMonthYear = lastMonth < 0 ? currentYear - 1 : currentYear;
           const adjustedLastMonth = (lastMonth + 12) % 12;
@@ -247,7 +247,7 @@ exports.getRegionalSales = async (req, res) => {
           prevStartDate = new Date(startDate.getTime() - 30 * 24 * 60 * 60 * 1000);
           prevEndDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
           break;
-        case "monthtodate":
+        case "currentmonth":
           startDate = new Date(Date.UTC(currentYear, currentMonth, 1));
           endDate = new Date(today);
           // Previous month, same days
@@ -255,7 +255,7 @@ exports.getRegionalSales = async (req, res) => {
           prevStartDate = new Date(Date.UTC(currentYear, currentMonth - 1, 1));
           prevEndDate = prevMonthDate;
           break;
-        case "yeartodate":
+        case "currentyear":
           startDate = new Date(Date.UTC(currentYear, 0, 1));
           endDate = new Date(today);
           prevStartDate = new Date(Date.UTC(currentYear - 1, 0, 1));
@@ -639,7 +639,7 @@ exports.getAdData = async (req, res) => {
       previousStartMonth = { year: prevStartDate.getUTCFullYear(), month: prevStartDate.getUTCMonth() + 1 };
     } else {
       switch (range) {
-        case "lastmonth":
+        case "previousmonth":
           const prevMonth = currentMonth - 1;
           const prevYear = prevMonth < 1 ? currentYear - 1 : currentYear;
           const adjustedPrevMonth = prevMonth < 1 ? 12 : prevMonth;
@@ -648,7 +648,7 @@ exports.getAdData = async (req, res) => {
           previousStartMonth = { year: prevYear, month: adjustedPrevMonth - 1 || 12 };
           previousEndMonth = { year: prevYear, month: adjustedPrevMonth - 1 || 12 };
           break;
-        case "yeartodate":
+        case "currentyear":
           currentStartMonth = { year: currentYear, month: 1 };
           currentEndMonth = { year: currentYear, month: currentMonth };
           previousStartMonth = { year: currentYear - 1, month: 1 };
@@ -669,7 +669,7 @@ exports.getAdData = async (req, res) => {
           const adjustedPrevStartMonth = prevStartMonthNum < 1 ? prevStartMonthNum + 12 : prevStartMonthNum;
           previousStartMonth = { year: prevStartYear, month: adjustedPrevStartMonth };
           break;
-        case "monthtodate":
+        case "currentmonth":
           currentStartMonth = { year: currentYear, month: currentMonth };
           currentEndMonth = { year: currentYear, month: currentMonth };
           const prevMonth2 = currentMonth - 1;
