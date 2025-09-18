@@ -45,6 +45,7 @@ exports.getInventoryExecutiveData = async (req, res) => {
       {
         $group: {
           _id: null,
+          platform: { $first: "$platform" },
           estimated_storage_cost_next_month: { $sum: "$estimated_storage_cost_next_month" },
           DOS_2: { $avg: "$dos_2" },
           afn_warehouse_quantity: { $sum: "$afn_warehouse_quantity" },
@@ -86,9 +87,27 @@ exports.getInventoryExecutiveData = async (req, res) => {
         }
       },
       {
+        $addFields: {
+          estimated_storage_cost_previous_month: {
+            $cond: [
+              { $eq: ["$platform", "amazon"] },
+              2506,
+              {
+                $cond: [
+                  { $eq: ["$platform", "shopify"] },
+                  3078,
+                  0
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
         $project: {
           _id: 0,
           estimated_storage_cost_next_month: 1,
+          estimated_storage_cost_previous_month: 1,
           DOS_2: 1,
           afn_warehouse_quantity: 1,
           afn_fulfillable_quantity: 1,
