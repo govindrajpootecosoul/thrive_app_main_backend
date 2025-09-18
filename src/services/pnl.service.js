@@ -21,7 +21,9 @@ exports.getPnlData = async (req, res) => {
     if (!range && !date && !startMonth && !endMonth) {
       return res.status(400).json({
         status: 400,
-        error: {
+        message: "Provide a valid range parameter (currentmonths, lastmonth, yeartodate, lastyear) or date/startMonth-endMonth parameters.",
+        success: false,
+        data: {
           code: "BAD_REQUEST",
           message: "range, date, startMonth, or endMonth is required",
           details: "Provide a valid range parameter (currentmonths, lastmonth, yeartodate, lastyear) or date/startMonth-endMonth parameters."
@@ -239,7 +241,9 @@ exports.getPnlExecutiveData = async (req, res) => {
     if (!range && !date && !startMonth && !endMonth) {
       return res.status(400).json({
         status: 400,
-        error: {
+       message: "Provide a valid range parameter (currentmonths, lastmonth, yeartodate, lastyear) or date/startMonth-endMonth parameters.",
+       success: false,
+        data: {
           code: "BAD_REQUEST",
           message: "range, date, startMonth, or endMonth is required",
           details: "Provide a valid range parameter (currentmonths, lastmonth, yeartodate, lastyear) or date/startMonth-endMonth parameters."
