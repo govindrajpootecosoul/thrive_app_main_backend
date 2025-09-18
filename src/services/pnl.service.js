@@ -18,6 +18,18 @@ exports.getPnlData = async (req, res) => {
       sortOrder
     } = req.query;
 
+    if (!range && !date && !startMonth && !endMonth) {
+      return res.status(400).json({
+        status: 400,
+        error: {
+          code: "BAD_REQUEST",
+          message: "range, date, startMonth, or endMonth is required",
+          details: "Provide a valid range parameter (currentmonths, lastmonth, yeartodate, lastyear) or date/startMonth-endMonth parameters."
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
     // Create dynamic connection to the specified database
     console.log('Database name for PNL data:', databaseName);
 
@@ -78,6 +90,22 @@ exports.getPnlData = async (req, res) => {
             yearMonthFilter.push(`${currentYear}-${month.toString().padStart(2, '0')}`);
           }
           break;
+        case 'lastyear':
+          const lastyear = now.year() - 1;
+          for (let month = 1; month <= 12; month++) {
+            yearMonthFilter.push(`${lastyear}-${month.toString().padStart(2, '0')}`);
+          }
+          break;
+        default:
+          return res.status(400).json({
+            status: 400,
+            error: {
+              code: "BAD_REQUEST",
+              message: `Invalid range: ${range}`,
+              details: "Provide a valid range parameter such as currentmonths, lastmonth, yeartodate, or lastyear."
+            },
+            timestamp: new Date().toISOString()
+          });
       }
     } else if (startMonth && endMonth) {
       // Custom range
@@ -206,6 +234,18 @@ exports.getPnlExecutiveData = async (req, res) => {
       cm3Type
     } = req.query;
 
+    if (!range && !date && !startMonth && !endMonth) {
+      return res.status(400).json({
+        status: 400,
+        error: {
+          code: "BAD_REQUEST",
+          message: "range, date, startMonth, or endMonth is required",
+          details: "Provide a valid range parameter (currentmonths, lastmonth, yeartodate, lastyear) or date/startMonth-endMonth parameters."
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
     // Create dynamic connection to the specified database
     console.log('Database name for PNL Executive data:', databaseName);
 
@@ -266,6 +306,24 @@ exports.getPnlExecutiveData = async (req, res) => {
             yearMonthFilter.push(`${currentYear}-${month.toString().padStart(2, '0')}`);
           }
           break;
+        case 'lastyear':
+          const lastyear = now.year() - 1;
+          for (let month = 1; month <= 12; month++) {
+            yearMonthFilter.push(`${lastyear}-${month.toString().padStart(2, '0')}`);
+          }
+          break;
+        default:
+          return res.status(400).json({
+            status: 400,
+            message: "Provide a valid range parameter such as currentmonths, lastmonth, yeartodate, or lastyear.",
+            success: false,
+            data: {
+              code: "BAD_REQUEST",
+              message: `Invalid range: ${range}`,
+              details: "Provide a valid range parameter such as currentmonths, lastmonth, yeartodate, or lastyear."
+            },
+            timestamp: new Date().toISOString()
+          });
       }
     } else if (startMonth && endMonth) {
       // Custom range

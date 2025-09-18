@@ -9,12 +9,26 @@ exports.getOrderListByDatabase = async (req, res) => {
       product_name,
       platform,
       country,
-      filterType = "currentmonth",
+      filterType,
       fromDate,
       toDate,
       startMonth,
       endMonth
     } = req.query;
+
+    if (!filterType) {
+      return res.status(400).json({
+        status: 400,
+         message: "Provide a valid filterType query parameter or body field.",
+         success: false,
+        data: {
+          code: "BAD_REQUEST",
+          message: "filterType is required",
+          details: "Provide a valid filterType query parameter or body field."
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
 
     // Create dynamic connection to the specified database
     console.log('Database name:', databaseName);
@@ -91,10 +105,10 @@ exports.getOrderListByDatabase = async (req, res) => {
         case "previousmonth": {
           // Previous month: full previous month
           const previousMonth = currentMonth - 1;
-          const previousYear = previousMonth < 0 ? currentYear - 1 : currentYear;
+          const lastyear = previousMonth < 0 ? currentYear - 1 : currentYear;
           const adjustedPrevMonth = (previousMonth + 12) % 12;
-          currentStartDate = new Date(Date.UTC(previousYear, adjustedPrevMonth, 1));
-          currentEndDate = new Date(Date.UTC(previousYear, adjustedPrevMonth + 1, 0, 23, 59, 59, 999));
+          currentStartDate = new Date(Date.UTC(lastyear, adjustedPrevMonth, 1));
+          currentEndDate = new Date(Date.UTC(lastyear, adjustedPrevMonth + 1, 0, 23, 59, 59, 999));
           break;
         }
         case "currentyear": {
@@ -103,11 +117,25 @@ exports.getOrderListByDatabase = async (req, res) => {
           currentEndDate = new Date(Date.UTC(currentYear, 11, 31, 23, 59, 59, 999)); // December 31st
           break;
         }
+        case "lastyear": {
+          // Previous year: from Jan 1st to Dec 31st of previous year
+          currentStartDate = new Date(Date.UTC(currentYear - 1, 0, 1)); // January 1st of previous year
+          currentEndDate = new Date(Date.UTC(currentYear - 1, 11, 31, 23, 59, 59, 999)); // December 31st of previous year
+          break;
+        }
         case "6months":
         default: {
-          currentStartDate = new Date(Date.UTC(currentYear, currentMonth - 5, 1));
-          currentEndDate = new Date(Date.UTC(currentYear, currentMonth + 1, 0, 23, 59, 59, 999));
-          break;
+          return res.status(400).json({
+            status: 400,
+            details: "Provide a valid filterType such as currentmonth, previousmonth, currentyear, or lastyear.",
+            success: false,
+            data: {
+              code: "BAD_REQUEST",
+              message: `Invalid filterType: ${filterType}`,
+              details: "Provide a valid filterType such as currentmonth, previousmonth, currentyear, or lastyear."
+            },
+            timestamp: new Date().toISOString()
+          });
         }
       }
     }
@@ -196,7 +224,7 @@ exports.getOrdersByDatabase = async (req, res) => {
     const {
       sku,
       platform,
-      filterType = "currentmonth",
+      filterType,
       purchase_date, // Support legacy parameter name
       fromDate,
       toDate,
@@ -208,6 +236,18 @@ exports.getOrdersByDatabase = async (req, res) => {
     } = req.query;
 
     const { databaseName } = req.params;
+
+    if (!filterType) {
+      return res.status(400).json({
+        status: 400,
+        error: {
+          code: "BAD_REQUEST",
+          message: "filterType is required",
+          details: "Provide a valid filterType query parameter or body field."
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
 
     // Use purchase_date if provided, otherwise use filterType
     const effectiveFilterType = purchase_date || filterType;
@@ -278,10 +318,10 @@ exports.getOrdersByDatabase = async (req, res) => {
         currentStartDate = new Date(Date.UTC(currentYear, currentMonth, 1));
         currentEndDate = new Date(Date.UTC(currentYear, currentMonth + 1, 0, 23, 59, 59, 999));
         const previousMonth = currentMonth - 1;
-        const previousYear = previousMonth < 0 ? currentYear - 1 : currentYear;
+        const lastyear = previousMonth < 0 ? currentYear - 1 : currentYear;
         const adjustedPrevMonth = (previousMonth + 12) % 12;
-        previousStartDate = new Date(Date.UTC(previousYear, adjustedPrevMonth, 1));
-        previousEndDate = new Date(Date.UTC(previousYear, adjustedPrevMonth + 1, 0, 23, 59, 59, 999));
+        previousStartDate = new Date(Date.UTC(lastyear, adjustedPrevMonth, 1));
+        previousEndDate = new Date(Date.UTC(lastyear, adjustedPrevMonth + 1, 0, 23, 59, 59, 999));
       }
     } else {
       switch (effectiveFilterType) {
@@ -292,24 +332,24 @@ exports.getOrdersByDatabase = async (req, res) => {
 
           // Previous month for comparison
           const previousMonth = currentMonth - 1;
-          const previousYear = previousMonth < 0 ? currentYear - 1 : currentYear;
+          const lastyear = previousMonth < 0 ? currentYear - 1 : currentYear;
           const adjustedPrevMonth = (previousMonth + 12) % 12;
 
-          previousStartDate = new Date(Date.UTC(previousYear, adjustedPrevMonth, 1));
-          previousEndDate = new Date(Date.UTC(previousYear, adjustedPrevMonth + 1, 0, 23, 59, 59, 999));
+          previousStartDate = new Date(Date.UTC(lastyear, adjustedPrevMonth, 1));
+          previousEndDate = new Date(Date.UTC(lastyear, adjustedPrevMonth + 1, 0, 23, 59, 59, 999));
           break;
         }
         case "previousmonth": {
           // Previous month: full previous month
           const previousMonth = currentMonth - 1;
-          const previousYear = previousMonth < 0 ? currentYear - 1 : currentYear;
+          const lastyear = previousMonth < 0 ? currentYear - 1 : currentYear;
           const adjustedPrevMonth = (previousMonth + 12) % 12;
-          currentStartDate = new Date(Date.UTC(previousYear, adjustedPrevMonth, 1));
-          currentEndDate = new Date(Date.UTC(previousYear, adjustedPrevMonth + 1, 0, 23, 59, 59, 999));
+          currentStartDate = new Date(Date.UTC(lastyear, adjustedPrevMonth, 1));
+          currentEndDate = new Date(Date.UTC(lastyear, adjustedPrevMonth + 1, 0, 23, 59, 59, 999));
 
           // Month before previous for comparison
           const monthBeforeLast = adjustedPrevMonth - 1;
-          const yearBeforeLast = monthBeforeLast < 0 ? previousYear - 1 : previousYear;
+          const yearBeforeLast = monthBeforeLast < 0 ? lastyear - 1 : lastyear;
           const adjustedMonthBeforeLast = (monthBeforeLast + 12) % 12;
           previousStartDate = new Date(Date.UTC(yearBeforeLast, adjustedMonthBeforeLast, 1));
           previousEndDate = new Date(Date.UTC(yearBeforeLast, adjustedMonthBeforeLast + 1, 0, 23, 59, 59, 999));
@@ -325,14 +365,27 @@ exports.getOrdersByDatabase = async (req, res) => {
           previousEndDate = new Date(Date.UTC(currentYear - 1, 11, 31, 23, 59, 59, 999)); // December 31st of previous year
           break;
         }
+        case "lastyear": {
+          // Previous year: from Jan 1st to Dec 31st of previous year
+          currentStartDate = new Date(Date.UTC(currentYear - 1, 0, 1)); // January 1st of previous year
+          currentEndDate = new Date(Date.UTC(currentYear - 1, 11, 31, 23, 59, 59, 999)); // December 31st of previous year
+
+          // Year before previous for comparison
+          previousStartDate = new Date(Date.UTC(currentYear - 2, 0, 1)); // January 1st of year before previous
+          previousEndDate = new Date(Date.UTC(currentYear - 2, 11, 31, 23, 59, 59, 999)); // December 31st of year before previous
+          break;
+        }
         case "6months":
         default: {
-          currentStartDate = new Date(Date.UTC(currentYear, currentMonth - 5, 1));
-          currentEndDate = new Date(Date.UTC(currentYear, currentMonth + 1, 0, 23, 59, 59, 999));
-          const duration = (currentEndDate - currentStartDate) / (1000 * 60 * 60 * 24) + 1;
-          previousEndDate = new Date(currentStartDate.getTime() - 1);
-          previousStartDate = new Date(previousEndDate.getTime() - (duration - 1) * 86400000);
-          break;
+          return res.status(400).json({
+            status: 400,
+            error: {
+              code: "BAD_REQUEST",
+              message: `Invalid filterType: ${effectiveFilterType}`,
+              details: "Provide a valid filterType such as currentmonth, previousmonth, currentyear, or lastyear."
+            },
+            timestamp: new Date().toISOString()
+          });
         }
       }
     }

@@ -5,13 +5,25 @@ exports.getAdSalesAdSpendByDatabase = async (req, res) => {
     const {
       platform,
       country,
-      filterType = "currentmonth",
+      filterType,
       startMonth,
       endMonth,
       sku
     } = req.query;
 
     const { databaseName } = req.params;
+
+    if (!filterType) {
+      return res.status(400).json({
+        status: 400,
+        error: {
+          code: "BAD_REQUEST",
+          message: "filterType is required",
+          details: "Provide a valid filterType query parameter or body field."
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
 
     // Create dynamic connection to the specified database
     console.log('Database name:', databaseName);
@@ -88,59 +100,61 @@ exports.getAdSalesAdSpendByDatabase = async (req, res) => {
         previousEndMonth = { year: prevYear, month: adjustedPrevMonth };
       }
     } else {
-      switch (filterType) {
-        case "currentmonth": {
-          currentStartMonth = { year: currentYear, month: currentMonth };
-          currentEndMonth = { year: currentYear, month: currentMonth };
+    switch (filterType) {
+      case "currentmonth": {
+        currentStartMonth = { year: currentYear, month: currentMonth };
+        currentEndMonth = { year: currentYear, month: currentMonth };
 
-          const prevMonth = currentMonth - 1;
-          const prevYear = prevMonth < 1 ? currentYear - 1 : currentYear;
-          const adjustedPrevMonth = prevMonth < 1 ? 12 : prevMonth;
-          previousStartMonth = { year: prevYear, month: adjustedPrevMonth };
-          previousEndMonth = { year: prevYear, month: adjustedPrevMonth };
-          break;
-        }
-        case "previousmonth": {
-          const prevMonth = currentMonth - 1;
-          const prevYear = prevMonth < 1 ? currentYear - 1 : currentYear;
-          const adjustedPrevMonth = prevMonth < 1 ? 12 : prevMonth;
-          currentStartMonth = { year: prevYear, month: adjustedPrevMonth };
-          currentEndMonth = { year: prevYear, month: adjustedPrevMonth };
-
-          const monthBeforeLast = adjustedPrevMonth - 1;
-          const yearBeforeLast = monthBeforeLast < 1 ? prevYear - 1 : prevYear;
-          const adjustedMonthBeforeLast = monthBeforeLast < 1 ? 12 : monthBeforeLast;
-          previousStartMonth = { year: yearBeforeLast, month: adjustedMonthBeforeLast };
-          previousEndMonth = { year: yearBeforeLast, month: adjustedMonthBeforeLast };
-          break;
-        }
-        case "currentyear": {
-          currentStartMonth = { year: currentYear, month: 1 };
-          currentEndMonth = { year: currentYear, month: 12 };
-
-          previousStartMonth = { year: currentYear - 1, month: 1 };
-          previousEndMonth = { year: currentYear - 1, month: 12 };
-          break;
-        }
-        case "6months":
-        default: {
-          const startMonthNum = currentMonth - 5;
-          const startYear = startMonthNum < 1 ? currentYear - 1 : currentYear;
-          const adjustedStartMonth = startMonthNum < 1 ? startMonthNum + 12 : startMonthNum;
-          currentStartMonth = { year: startYear, month: adjustedStartMonth };
-          currentEndMonth = { year: currentYear, month: currentMonth };
-
-          const prevEndMonthNum = adjustedStartMonth - 1;
-          const prevEndYear = prevEndMonthNum < 1 ? startYear - 1 : startYear;
-          const adjustedPrevEndMonth = prevEndMonthNum < 1 ? 12 : prevEndMonthNum;
-          previousEndMonth = { year: prevEndYear, month: adjustedPrevEndMonth };
-          const prevStartMonthNum = adjustedPrevEndMonth - 5;
-          const prevStartYear = prevStartMonthNum < 1 ? prevEndYear - 1 : prevEndYear;
-          const adjustedPrevStartMonth = prevStartMonthNum < 1 ? prevStartMonthNum + 12 : prevStartMonthNum;
-          previousStartMonth = { year: prevStartYear, month: adjustedPrevStartMonth };
-          break;
-        }
+        const prevMonth = currentMonth - 1;
+        const prevYear = prevMonth < 1 ? currentYear - 1 : currentYear;
+        const adjustedPrevMonth = prevMonth < 1 ? 12 : prevMonth;
+        previousStartMonth = { year: prevYear, month: adjustedPrevMonth };
+        previousEndMonth = { year: prevYear, month: adjustedPrevMonth };
+        break;
       }
+      case "previousmonth": {
+        const prevMonth = currentMonth - 1;
+        const prevYear = prevMonth < 1 ? currentYear - 1 : currentYear;
+        const adjustedPrevMonth = prevMonth < 1 ? 12 : prevMonth;
+        currentStartMonth = { year: prevYear, month: adjustedPrevMonth };
+        currentEndMonth = { year: prevYear, month: adjustedPrevMonth };
+
+        const monthBeforeLast = adjustedPrevMonth - 1;
+        const yearBeforeLast = monthBeforeLast < 1 ? prevYear - 1 : prevYear;
+        const adjustedMonthBeforeLast = monthBeforeLast < 1 ? 12 : monthBeforeLast;
+        previousStartMonth = { year: yearBeforeLast, month: adjustedMonthBeforeLast };
+        previousEndMonth = { year: yearBeforeLast, month: adjustedMonthBeforeLast };
+        break;
+      }
+      case "currentyear": {
+        currentStartMonth = { year: currentYear, month: 1 };
+        currentEndMonth = { year: currentYear, month: 12 };
+
+        previousStartMonth = { year: currentYear - 1, month: 1 };
+        previousEndMonth = { year: currentYear - 1, month: 12 };
+        break;
+      }
+      case "lastyear": {
+        currentStartMonth = { year: currentYear - 1, month: 1 };
+        currentEndMonth = { year: currentYear - 1, month: 12 };
+
+        previousStartMonth = { year: currentYear - 2, month: 1 };
+        previousEndMonth = { year: currentYear - 2, month: 12 };
+        break;
+      }
+      case "6months":
+      default: {
+        return res.status(400).json({
+          status: 400,
+          error: {
+            code: "BAD_REQUEST",
+            message: `Invalid filterType: ${filterType}`,
+            details: "Provide a valid filterType such as currentmonth, previousmonth, currentyear, or lastyear."
+          },
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
     }
 
     // Filters
