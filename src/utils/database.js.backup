@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 /**
- * Creates a MongoDB connection with NO timeout settings for aggregation operations
+ * Creates a MongoDB connection with optimized timeout settings
  * @param {string} uri - MongoDB connection URI
  * @param {string} databaseName - Database name for logging
  * @returns {Promise<Connection>} MongoDB connection promise
@@ -12,14 +12,13 @@ const createDatabaseConnection = async (uri, databaseName = 'database') => {
   const connection = mongoose.createConnection(uri, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    // Remove ALL timeout settings to allow unlimited aggregation time
-    serverSelectionTimeoutMS: 0,     // No timeout for server selection
-    socketTimeoutMS: 0,              // No timeout for socket operations
-    bufferCommands: false,           // Disable mongoose buffering
-    maxPoolSize: 20,                 // Maintain up to 20 socket connections
-    minPoolSize: 5,                  // Maintain a minimum of 5 socket connections
-    maxIdleTimeMS: 300000,           // Close connections after 5 minutes of inactivity
-    // Removed invalid bufferMaxEntries option
+    // Connection timeout settings
+    serverSelectionTimeoutMS: 30000, // 30 seconds
+    socketTimeoutMS: 45000, // 45 seconds
+    bufferCommands: false, // Disable mongoose buffering
+    maxPoolSize: 10, // Maintain up to 10 socket connections
+    minPoolSize: 5, // Maintain a minimum of 5 socket connections
+    maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
     // Retry connection settings
     retryWrites: true,
     retryReads: true,

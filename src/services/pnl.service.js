@@ -206,7 +206,7 @@ exports.getPnlData = async (req, res) => {
     }
 
     // Query MongoDB with aggregation
-    const pnlData = await Pnl.aggregate(aggregationPipeline);
+    const pnlData = await Pnl.aggregate(aggregationPipeline).allowDiskUse(true);
 
     console.log('Total PNL records found:', pnlData.length);
 
@@ -460,7 +460,7 @@ exports.getPnlExecutiveData = async (req, res) => {
 
     // Get current period data
     const currentPeriodPipeline = createAggregationPipeline(filter);
-    const currentPeriodResult = await Pnl.aggregate(currentPeriodPipeline);
+    const currentPeriodResult = await Pnl.aggregate(currentPeriodPipeline).allowDiskUse(true);
     currentPeriodData = currentPeriodResult.length > 0 ? currentPeriodResult[0] : {};
 
     // Always get previous period data for comparison
@@ -469,7 +469,7 @@ exports.getPnlExecutiveData = async (req, res) => {
       previousFilter.year_month = { $in: previousPeriodFilter };
 
       const previousPeriodPipeline = createAggregationPipeline(previousFilter);
-      const previousPeriodResult = await Pnl.aggregate(previousPeriodPipeline);
+      const previousPeriodResult = await Pnl.aggregate(previousPeriodPipeline).allowDiskUse(true);
       previousPeriodData = previousPeriodResult.length > 0 ? previousPeriodResult[0] : {};
 
       // Calculate comparison metrics
@@ -596,7 +596,7 @@ exports.getPnlDropdownData = async (req, res) => {
       }
     });
 
-    const dropdownData = await Pnl.aggregate(aggregationPipeline);
+    const dropdownData = await Pnl.aggregate(aggregationPipeline).allowDiskUse(true);
 
     if (dropdownData.length === 0) {
       return res.json({

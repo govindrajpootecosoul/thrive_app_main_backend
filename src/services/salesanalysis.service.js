@@ -132,7 +132,7 @@ exports.getSalesData = async (req, res) => {
         }
       ];
 
-      return await Order.aggregate(pipeline);
+      return await Order.aggregate(pipeline).allowDiskUse(true);
     };
 
     const data2024 = await getDataForYear(2024);
@@ -568,7 +568,7 @@ exports.getSalesComparison = async (req, res) => {
         }
       ];
 
-      return await Order.aggregate(pipeline);
+      return await Order.aggregate(pipeline).allowDiskUse(true);
     };
 
     const data2024 = await getDataForYear(2024);

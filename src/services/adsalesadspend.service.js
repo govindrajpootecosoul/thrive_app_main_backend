@@ -195,7 +195,7 @@ exports.getAdSalesAdSpendByDatabase = async (req, res) => {
       }
     ];
 
-    const currentResult = await AdSalesAdSpend.aggregate(currentPipeline);
+    const currentResult = await AdSalesAdSpend.aggregate(currentPipeline).allowDiskUse(true);
     const current = currentResult[0] || { totalAdSales: 0, totalAdSpend: 0, totalRevenue: 0 };
 
     // Aggregate previous period
@@ -211,7 +211,7 @@ exports.getAdSalesAdSpendByDatabase = async (req, res) => {
       }
     ];
 
-    const previousResult = await AdSalesAdSpend.aggregate(previousPipeline);
+    const previousResult = await AdSalesAdSpend.aggregate(previousPipeline).allowDiskUse(true);
     const previous = previousResult[0] || { totalAdSales: 0, totalAdSpend: 0, totalRevenue: 0 };
 
     // Calculate metrics
@@ -219,7 +219,7 @@ exports.getAdSalesAdSpendByDatabase = async (req, res) => {
       const { totalAdSales, totalAdSpend, totalRevenue } = data;
       const ACOS = totalAdSales > 0 ? (totalAdSpend / totalAdSales) * 100 : 0;
       const TACOS = totalRevenue > 0 ? (totalAdSpend / totalRevenue) * 100 : 0;
-      const ROAS = totalAdSpend > 0 ? totalAdSales / totalAdSpend : 0;
+      const ROAS = totalAdSpend > 0 ? totalRevenue / totalAdSpend : 0;
       const organicrevenue = totalRevenue - totalAdSales;
       return {
         totalAdSales: totalAdSales.toFixed(2),

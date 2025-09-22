@@ -377,7 +377,7 @@ exports.getInventoryCountSummary = async (req, res) => {
       }
     ];
 
-    const countSummary = await Inventory.aggregate(aggregationPipeline).allowDiskUse(true);
+    const countSummary = await Inventory.aggregate(aggregationPipeline);
 
     console.log('Inventory count summary:', countSummary.length);
 

@@ -123,7 +123,7 @@ exports.getInventoryExecutiveData = async (req, res) => {
       }
     ];
 
-    const inventoryExecutiveData = await Inventory.aggregate(aggregationPipeline).allowDiskUse(true);
+    const inventoryExecutiveData = await Inventory.aggregate(aggregationPipeline);
 
     res.json({
       success: true,
