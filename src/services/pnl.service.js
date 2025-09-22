@@ -241,8 +241,8 @@ exports.getPnlExecutiveData = async (req, res) => {
     if (!range && !date && !startMonth && !endMonth) {
       return res.status(400).json({
         status: 400,
-       message: "Provide a valid range parameter (currentmonths, lastmonth, yeartodate, lastyear) or date/startMonth-endMonth parameters.",
-       success: false,
+        message: "Provide a valid range parameter (currentmonths, lastmonth, yeartodate, lastyear) or date/startMonth-endMonth parameters.",
+        success: false,
         data: {
           code: "BAD_REQUEST",
           message: "range, date, startMonth, or endMonth is required",
@@ -294,29 +294,68 @@ exports.getPnlExecutiveData = async (req, res) => {
     const yearMonthFilter = [];
     const now = moment();
 
+    // Calculate current and previous period filters
+    let currentPeriodFilter = [];
+    let previousPeriodFilter = [];
+    let currentPeriodLabel = '';
+    let previousPeriodLabel = '';
+
     if (date) {
       // Specific date (YYYY-MM)
-      yearMonthFilter.push(date);
+      currentPeriodFilter.push(date);
+      currentPeriodLabel = date;
+      // Previous month from specific date
+      const dateMoment = moment(date, 'YYYY-MM');
+      previousPeriodFilter.push(dateMoment.clone().subtract(1, 'month').format('YYYY-MM'));
+      previousPeriodLabel = dateMoment.clone().subtract(1, 'month').format('YYYY-MM');
     } else if (range) {
       switch (range) {
         case 'currentmonth':
-          yearMonthFilter.push(now.format('YYYY-MM'));
+          const currentMonthStr = now.format('YYYY-MM');
+          const previousMonthStr = now.clone().subtract(1, 'month').format('YYYY-MM');
+          currentPeriodFilter.push(currentMonthStr);
+          previousPeriodFilter.push(previousMonthStr);
+          currentPeriodLabel = currentMonthStr;
+          previousPeriodLabel = previousMonthStr;
+          yearMonthFilter.push(currentMonthStr);
           break;
         case 'previousmonth':
-          yearMonthFilter.push(now.subtract(1, 'month').format('YYYY-MM'));
+          const prevMonthStr = now.clone().subtract(1, 'month').format('YYYY-MM');
+          const prevPrevMonthStr = now.clone().subtract(2, 'month').format('YYYY-MM');
+          currentPeriodFilter.push(prevMonthStr);
+          previousPeriodFilter.push(prevPrevMonthStr);
+          currentPeriodLabel = prevMonthStr;
+          previousPeriodLabel = prevPrevMonthStr;
+          yearMonthFilter.push(prevMonthStr);
           break;
         case 'currentyear':
           const currentYear = now.year();
-          const currentMonth = now.month() + 1; // moment months are 0-based
+          const currentMonth = now.month() + 1;
           for (let month = 1; month <= currentMonth; month++) {
             yearMonthFilter.push(`${currentYear}-${month.toString().padStart(2, '0')}`);
           }
+          currentPeriodLabel = `Current Year (${currentYear})`;
+          // Previous year
+          const prevYear = currentYear - 1;
+          previousPeriodFilter = [];
+          for (let month = 1; month <= 12; month++) {
+            previousPeriodFilter.push(`${prevYear}-${month.toString().padStart(2, '0')}`);
+          }
+          previousPeriodLabel = `Previous Year (${prevYear})`;
           break;
         case 'lastyear':
           const lastyear = now.year() - 1;
           for (let month = 1; month <= 12; month++) {
             yearMonthFilter.push(`${lastyear}-${month.toString().padStart(2, '0')}`);
           }
+          currentPeriodLabel = `Last Year (${lastyear})`;
+          // Previous year (year before last year)
+          const prevLastYear = lastyear - 1;
+          previousPeriodFilter = [];
+          for (let month = 1; month <= 12; month++) {
+            previousPeriodFilter.push(`${prevLastYear}-${month.toString().padStart(2, '0')}`);
+          }
+          previousPeriodLabel = `Previous Year (${prevLastYear})`;
           break;
         default:
           return res.status(400).json({
@@ -340,6 +379,21 @@ exports.getPnlExecutiveData = async (req, res) => {
         yearMonthFilter.push(current.format('YYYY-MM'));
         current.add(1, 'month');
       }
+
+      currentPeriodLabel = `${startMonth} to ${endMonth}`;
+
+      // Calculate previous period (same duration before start date)
+      const duration = end.diff(start, 'months') + 1;
+      const prevStart = start.clone().subtract(duration, 'months');
+      const prevEnd = start.clone().subtract(1, 'months');
+
+      let prevCurrent = prevStart.clone();
+      while (prevCurrent.isSameOrBefore(prevEnd)) {
+        previousPeriodFilter.push(prevCurrent.format('YYYY-MM'));
+        prevCurrent.add(1, 'month');
+      }
+
+      previousPeriodLabel = `${prevStart.format('YYYY-MM')} to ${prevEnd.format('YYYY-MM')}`;
     }
 
     if (yearMonthFilter.length > 0) {
@@ -361,50 +415,108 @@ exports.getPnlExecutiveData = async (req, res) => {
       }
     }
 
-    // Aggregation pipeline
-    const aggregationPipeline = [
-      { $match: filter },
-      {
-        $group: {
-          _id: null,
-          ad_cost: { $sum: "$ad_cost" },
-          deal_fee: { $sum: "$deal_fee" },
-          fba_inventory_fee: { $sum: "$fba_inventory_fee" },
-          fba_reimbursement: { $sum: "$fba_reimbursement" },
-          liquidations: { $sum: "$liquidations" },
-          net_sales: { $sum: "$net_sales" },
-          net_sales_with_tax: { $sum: "$net_sales_with_tax" },
-          other_marketing_expenses: { $sum: "$other_marketing_expenses" },
-          storage_fee: { $sum: "$storage_fee" },
-          total_return_with_tax: { $sum: "$total_return_with_tax" },
-          total_sales: { $sum: "$total_sales" },
-          total_sales_with_tax: { $sum: "$total_sales_with_tax" },
-          total_units: { $sum: "$total_units" },
-          total_return_amount: { $sum: "$total_return_amount" },
-          fba_fees: { $sum: "$fba_fees" },
-          promotional_rebates: { $sum: "$promotional_rebates" },
-          quantity: { $sum: "$quantity" },
-          refund_quantity: { $sum: "$refund_quantity" },
-          selling_fees: { $sum: "$selling_fees" },
-          spend: { $sum: "$spend" },
-          product_cogs: { $sum: "$product_cogs" },
-          cogs: { $sum: "$cogs" },
-          cm1: { $sum: "$cm1" },
-          heads_cm2: { $sum: "$heads_cm2" },
-          cm2: { $sum: "$cm2" },
-          heads_cm3: { $sum: "$heads_cm3" },
-          cm3: { $sum: "$cm3" }
+    // Helper function to create aggregation pipeline
+    const createAggregationPipeline = (matchFilter) => {
+      return [
+        { $match: matchFilter },
+        {
+          $group: {
+            _id: null,
+            ad_cost: { $sum: "$ad_cost" },
+            deal_fee: { $sum: "$deal_fee" },
+            fba_inventory_fee: { $sum: "$fba_inventory_fee" },
+            fba_reimbursement: { $sum: "$fba_reimbursement" },
+            liquidations: { $sum: "$liquidations" },
+            net_sales: { $sum: "$net_sales" },
+            net_sales_with_tax: { $sum: "$net_sales_with_tax" },
+            other_marketing_expenses: { $sum: "$other_marketing_expenses" },
+            storage_fee: { $sum: "$storage_fee" },
+            total_return_with_tax: { $sum: "$total_return_with_tax" },
+            total_sales: { $sum: "$total_sales" },
+            total_sales_with_tax: { $sum: "$total_sales_with_tax" },
+            total_units: { $sum: "$total_units" },
+            total_return_amount: { $sum: "$total_return_amount" },
+            fba_fees: { $sum: "$fba_fees" },
+            promotional_rebates: { $sum: "$promotional_rebates" },
+            quantity: { $sum: "$quantity" },
+            refund_quantity: { $sum: "$refund_quantity" },
+            selling_fees: { $sum: "$selling_fees" },
+            spend: { $sum: "$spend" },
+            product_cogs: { $sum: "$product_cogs" },
+            cogs: { $sum: "$cogs" },
+            cm1: { $sum: "$cm1" },
+            heads_cm2: { $sum: "$heads_cm2" },
+            cm2: { $sum: "$cm2" },
+            heads_cm3: { $sum: "$heads_cm3" },
+            cm3: { $sum: "$cm3" }
+          }
         }
-      }
-    ];
+      ];
+    };
 
-    const pnlExecutiveData = await Pnl.aggregate(aggregationPipeline);
+    let currentPeriodData = null;
+    let previousPeriodData = null;
+    let comparison = null;
 
-    res.json({
+    // Get current period data
+    const currentPeriodPipeline = createAggregationPipeline(filter);
+    const currentPeriodResult = await Pnl.aggregate(currentPeriodPipeline);
+    currentPeriodData = currentPeriodResult.length > 0 ? currentPeriodResult[0] : {};
+
+    // Always get previous period data for comparison
+    if (previousPeriodFilter.length > 0) {
+      const previousFilter = { ...filter };
+      previousFilter.year_month = { $in: previousPeriodFilter };
+
+      const previousPeriodPipeline = createAggregationPipeline(previousFilter);
+      const previousPeriodResult = await Pnl.aggregate(previousPeriodPipeline);
+      previousPeriodData = previousPeriodResult.length > 0 ? previousPeriodResult[0] : {};
+
+      // Calculate comparison metrics
+      const calculatePercentChange = (current, previous) => {
+        if (!previous || previous === 0) return "N/A";
+        const diff = ((current - previous) / previous) * 100;
+        return (diff >= 0 ? diff.toFixed(2) + "% Gain" : diff.toFixed(2) + "% Loss");
+      };
+
+      comparison = {
+
+          cm1_change: calculatePercentChange(currentPeriodData.cm1, previousPeriodData.cm1),
+          cm2_change: calculatePercentChange(currentPeriodData.cm2, previousPeriodData.cm2),
+          cm3_change: calculatePercentChange(currentPeriodData.cm3, previousPeriodData.cm3),
+        // currentPeriod: {
+        //   period: currentPeriodLabel,
+        //   data: currentPeriodData
+        // },
+        // previousPeriod: {
+        //   period: previousPeriodLabel,
+        //   data: previousPeriodData
+        // },
+        // changes: {
+        //   //net_sales_change: calculatePercentChange(currentPeriodData.net_sales, previousPeriodData.net_sales),
+        //   //total_sales_change: calculatePercentChange(currentPeriodData.total_sales, previousPeriodData.total_sales),
+        //   cm1_change: calculatePercentChange(currentPeriodData.cm1, previousPeriodData.cm1),
+        //   cm2_change: calculatePercentChange(currentPeriodData.cm2, previousPeriodData.cm2),
+        //   cm3_change: calculatePercentChange(currentPeriodData.cm3, previousPeriodData.cm3),
+        //  // ad_cost_change: calculatePercentChange(currentPeriodData.ad_cost, previousPeriodData.ad_cost),
+        //   //fba_fees_change: calculatePercentChange(currentPeriodData.fba_fees, previousPeriodData.fba_fees)
+        // }
+      };
+    }
+
+    const response = {
       success: true,
       message: 'PNL Executive data retrieved successfully',
-      data: pnlExecutiveData.length > 0 ? pnlExecutiveData[0] : {}
-    });
+      data: {
+        currentPeriod: currentPeriodData,
+        ...(previousPeriodData && {
+          previousPeriod: previousPeriodData,
+          comparison: comparison
+        })
+      }
+    };
+
+    res.json(response);
 
   } catch (error) {
     console.error('PNL Executive service error:', error);
