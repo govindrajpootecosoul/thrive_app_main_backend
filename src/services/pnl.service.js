@@ -476,7 +476,8 @@ exports.getPnlExecutiveData = async (req, res) => {
       const calculatePercentChange = (current, previous) => {
         if (!previous || previous === 0) return "N/A";
         const diff = ((current - previous) / previous) * 100;
-        return (diff >= 0 ? diff.toFixed(2) + "% Gain" : diff.toFixed(2) + "% Loss");
+        return (diff >= 0 ? diff.toFixed(2)  : diff.toFixed(2));
+        //return (diff >= 0 ? diff.toFixed(2) + "% Gain" : diff.toFixed(2) + "% Loss");
       };
 
       comparison = {
