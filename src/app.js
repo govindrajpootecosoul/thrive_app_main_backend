@@ -31,4 +31,7 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running' });
 });
 
+const fileRoutes = require("./routes/file.routes");
+app.use("/api/files", fileRoutes);
+
 module.exports = app;

@@ -1,9 +1,9 @@
-import express from "express";
-import { processFolderFiles } from "../controllers/file.controller.js";
+const express = require("express");
+const { processFolderFiles } = require("../controllers/file.controller");
 
 const router = express.Router();
 
-// Define POST route
-router.post("/process-files/:folderName", processFolderFiles);
+// POST: /api/files/process/:folderName
+router.post("/process/:folderName", processFolderFiles);
 
-export default router;
+module.exports = router;
