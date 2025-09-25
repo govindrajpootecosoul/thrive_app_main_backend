@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
 const moment = require('moment');
+const pnlData = require('../data_source/All_geographies_PNL.json');
 
 exports.getPnlData = async (req, res) => {
   try {
@@ -31,44 +31,6 @@ exports.getPnlData = async (req, res) => {
         timestamp: new Date().toISOString()
       });
     }
-
-    // Create dynamic connection to the specified database
-    console.log('Database name for PNL data:', databaseName);
-
-    // More flexible database name replacement
-    let dynamicUri = process.env.MONGODB_URI;
-    if (dynamicUri.includes('/main_db?')) {
-      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
-    } else if (dynamicUri.includes('/main_db/')) {
-      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
-    } else {
-      // If no main_db found, try to replace the last database name in the URI
-      const uriParts = dynamicUri.split('/');
-      if (uriParts.length > 3) {
-        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
-        dynamicUri = uriParts.join('/');
-      }
-    }
-
-    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
-    const dynamicConnection = mongoose.createConnection(dynamicUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-
-    // Define temporary model
-    const PnlSchema = new mongoose.Schema({}, { strict: false });
-    const Pnl = dynamicConnection.model("Pnl", PnlSchema, "pnl");
-
-    // Build filter object
-    const filter = {};
-
-    // Basic filters
-    if (sku) filter.sku = sku;
-    if (category) filter.product_category = category;
-    if (productName) filter.product_name = productName;
-    if (country) filter.country = country;
-    if (platform) filter.platform = platform;
 
     // Date range filters
     const yearMonthFilter = [];
@@ -122,98 +84,126 @@ exports.getPnlData = async (req, res) => {
       }
     }
 
-    if (yearMonthFilter.length > 0) {
-      filter.year_month = { $in: yearMonthFilter };
-    }
+    // Filter data
+    let filteredData = pnlData.filter(item => {
+      // Basic filters
+      if (sku && item.sku !== sku) return false;
+      if (category && item.product_category !== category) return false;
+      if (productName && item.product_name !== productName) return false;
+      if (country && item.country !== country) return false;
+      if (platform && item.platform !== platform) return false;
 
-    // CM3 type filter
-    if (cm3Type) {
-      switch (cm3Type) {
-        case 'gainer':
-          filter.cm3 = { $gte: 0 };
-          break;
-        case 'drainer':
-          filter.cm3 = { $lt: 0 };
-          break;
-        case 'all':
-          // No filter
-          break;
+      // Date filter
+      if (yearMonthFilter.length > 0 && !yearMonthFilter.includes(item.year_month)) return false;
+
+      // CM3 type filter
+      if (cm3Type) {
+        switch (cm3Type) {
+          case 'gainer':
+            if (item.cm3 < 0) return false;
+            break;
+          case 'drainer':
+            if (item.cm3 >= 0) return false;
+            break;
+          case 'all':
+            // No filter
+            break;
+        }
       }
-    }
 
-    // Build sort query
-    const sortQuery = {};
+      return true;
+    });
+
+    // Group by sku and sum
+    const grouped = {};
+    filteredData.forEach(item => {
+      const key = item.sku;
+      if (!grouped[key]) {
+        grouped[key] = {
+          sku: item.sku,
+          product_name: item.product_name,
+          product_category: item.product_category,
+          country: item.country,
+          platform: item.platform,
+          year_month: item.year_month,
+          ad_cost: 0,
+          deal_fee: 0,
+          fba_inventory_fee: 0,
+          fba_reimbursement: 0,
+          liquidations: 0,
+          net_sales: 0,
+          net_sales_with_tax: 0,
+          other_marketing_expenses: 0,
+          storage_fee: 0,
+          total_return_with_tax: 0,
+          total_sales: 0,
+          total_sales_with_tax: 0,
+          total_units: 0,
+          total_return_amount: 0,
+          fba_fees: 0,
+          promotional_rebates: 0,
+          quantity: 0,
+          refund_quantity: 0,
+          selling_fees: 0,
+          spend: 0,
+          product_cogs: 0,
+          cogs: 0,
+          cm1: 0,
+          heads_cm2: 0,
+          cm2: 0,
+          heads_cm3: 0,
+          cm3: 0
+        };
+      }
+      grouped[key].ad_cost += Number(item.ad_cost) || 0;
+      grouped[key].deal_fee += Number(item.deal_fee) || 0;
+      grouped[key].fba_inventory_fee += Number(item.fba_inventory_fee) || 0;
+      grouped[key].fba_reimbursement += Number(item.fba_reimbursement) || 0;
+      grouped[key].liquidations += Number(item.liquidations) || 0;
+      grouped[key].net_sales += Number(item.net_sales) || 0;
+      grouped[key].net_sales_with_tax += Number(item.net_sales_with_tax) || 0;
+      grouped[key].other_marketing_expenses += Number(item.other_marketing_expenses) || 0;
+      grouped[key].storage_fee += Number(item.storage_fee) || 0;
+      grouped[key].total_return_with_tax += Number(item.total_return_with_tax) || 0;
+      grouped[key].total_sales += Number(item.total_sales) || 0;
+      grouped[key].total_sales_with_tax += Number(item.total_sales_with_tax) || 0;
+      grouped[key].total_units += Number(item.total_units) || 0;
+      grouped[key].total_return_amount += Number(item.total_return_amount) || 0;
+      grouped[key].fba_fees += Number(item.fba_fees) || 0;
+      grouped[key].promotional_rebates += Number(item.promotional_rebates) || 0;
+      grouped[key].quantity += Number(item.quantity) || 0;
+      grouped[key].refund_quantity += Number(item.refund_quantity) || 0;
+      grouped[key].selling_fees += Number(item.selling_fees) || 0;
+      grouped[key].spend += Number(item.spend) || 0;
+      grouped[key].product_cogs += Number(item.product_cogs) || 0;
+      grouped[key].cogs += Number(item.cogs) || 0;
+      grouped[key].cm1 += Number(item.cm1) || 0;
+      grouped[key].heads_cm2 += Number(item.heads_cm2) || 0;
+      grouped[key].cm2 += Number(item.cm2) || 0;
+      grouped[key].heads_cm3 += Number(item.heads_cm3) || 0;
+      grouped[key].cm3 += Number(item.cm3) || 0;
+    });
+
+    let pnlResult = Object.values(grouped);
+
+    // Sort
     if (sortOrder) {
       switch (sortOrder) {
         case 'ascending':
-          sortQuery.cm3 = 1;
+          pnlResult.sort((a, b) => a.cm3 - b.cm3);
           break;
         case 'descending':
-          sortQuery.cm3 = -1;
+          pnlResult.sort((a, b) => b.cm3 - a.cm3);
           break;
       }
     }
 
-    console.log('PNL filter:', filter);
-    console.log('PNL sort:', sortQuery);
-
-    // Aggregation pipeline to group by sku and sum data
-    const aggregationPipeline = [
-      { $match: filter },
-      {
-        $group: {
-          _id: "$sku",
-          sku: { $first: "$sku" },
-          product_name: { $first: "$product_name" },
-          product_category: { $first: "$product_category" },
-          country: { $first: "$country" },
-          platform: { $first: "$platform" },
-          year_month: { $first: "$year_month" },
-          ad_cost: { $sum: "$ad_cost" },
-          deal_fee: { $sum: "$deal_fee" },
-          fba_inventory_fee: { $sum: "$fba_inventory_fee" },
-          fba_reimbursement: { $sum: "$fba_reimbursement" },
-          liquidations: { $sum: "$liquidations" },
-          net_sales: { $sum: "$net_sales" },
-          net_sales_with_tax: { $sum: "$net_sales_with_tax" },
-          other_marketing_expenses: { $sum: "$other_marketing_expenses" },
-          storage_fee: { $sum: "$storage_fee" },
-          total_return_with_tax: { $sum: "$total_return_with_tax" },
-          total_sales: { $sum: "$total_sales" },
-          total_sales_with_tax: { $sum: "$total_sales_with_tax" },
-          total_units: { $sum: "$total_units" },
-          total_return_amount: { $sum: "$total_return_amount" },
-          fba_fees: { $sum: "$fba_fees" },
-          promotional_rebates: { $sum: "$promotional_rebates" },
-          quantity: { $sum: "$quantity" },
-          refund_quantity: { $sum: "$refund_quantity" },
-          selling_fees: { $sum: "$selling_fees" },
-          spend: { $sum: "$spend" },
-          product_cogs: { $sum: "$product_cogs" },
-          cogs: { $sum: "$cogs" },
-          cm1: { $sum: "$cm1" },
-          heads_cm2: { $sum: "$heads_cm2" },
-          cm2: { $sum: "$cm2" },
-          heads_cm3: { $sum: "$heads_cm3" },
-          cm3: { $sum: "$cm3" }
-        }
-      }
-    ];
-
-    // Add sort stage only if sortQuery is not empty
-    if (Object.keys(sortQuery).length > 0) {
-      aggregationPipeline.push({ $sort: sortQuery });
-    }
-
-    // Query MongoDB with aggregation
-    const pnlData = await Pnl.aggregate(aggregationPipeline).allowDiskUse(true);
-
-    console.log('Total PNL records found:', pnlData.length);
+    console.log('Total PNL records found:', pnlResult.length);
 
     res.json({
       success: true,
       message: 'PNL data retrieved successfully',
-      data: {pnlData}
+      data: {pnlData: pnlResult}
     });
 
   } catch (error) {
@@ -251,44 +241,6 @@ exports.getPnlExecutiveData = async (req, res) => {
         timestamp: new Date().toISOString()
       });
     }
-
-    // Create dynamic connection to the specified database
-    console.log('Database name for PNL Executive data:', databaseName);
-
-    // More flexible database name replacement
-    let dynamicUri = process.env.MONGODB_URI;
-    if (dynamicUri.includes('/main_db?')) {
-      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
-    } else if (dynamicUri.includes('/main_db/')) {
-      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
-    } else {
-      // If no main_db found, try to replace the last database name in the URI
-      const uriParts = dynamicUri.split('/');
-      if (uriParts.length > 3) {
-        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
-        dynamicUri = uriParts.join('/');
-      }
-    }
-
-    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
-    const dynamicConnection = mongoose.createConnection(dynamicUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-
-    // Define temporary model
-    const PnlSchema = new mongoose.Schema({}, { strict: false });
-    const Pnl = dynamicConnection.model("Pnl", PnlSchema, "pnl");
-
-    // Build filter object
-    const filter = {};
-
-    // Basic filters
-    if (sku) filter.sku = sku;
-    if (category) filter.product_category = category;
-    if (productName) filter.product_name = productName;
-    if (country) filter.country = country;
-    if (platform) filter.platform = platform;
 
     // Date range filters
     const yearMonthFilter = [];
@@ -396,62 +348,66 @@ exports.getPnlExecutiveData = async (req, res) => {
       previousPeriodLabel = `${prevStart.format('YYYY-MM')} to ${prevEnd.format('YYYY-MM')}`;
     }
 
-    if (yearMonthFilter.length > 0) {
-      filter.year_month = { $in: yearMonthFilter };
-    }
-
-    // CM3 type filter
-    if (cm3Type) {
-      switch (cm3Type) {
-        case 'gainer':
-          filter.cm3 = { $gte: 0 };
-          break;
-        case 'drainer':
-          filter.cm3 = { $lt: 0 };
-          break;
-        case 'all':
-          // No filter
-          break;
-      }
-    }
-
-    // Helper function to create aggregation pipeline
-    const createAggregationPipeline = (matchFilter) => {
-      return [
-        { $match: matchFilter },
-        {
-          $group: {
-            _id: null,
-            ad_cost: { $sum: "$ad_cost" },
-            deal_fee: { $sum: "$deal_fee" },
-            fba_inventory_fee: { $sum: "$fba_inventory_fee" },
-            fba_reimbursement: { $sum: "$fba_reimbursement" },
-            liquidations: { $sum: "$liquidations" },
-            net_sales: { $sum: "$net_sales" },
-            net_sales_with_tax: { $sum: "$net_sales_with_tax" },
-            other_marketing_expenses: { $sum: "$other_marketing_expenses" },
-            storage_fee: { $sum: "$storage_fee" },
-            total_return_with_tax: { $sum: "$total_return_with_tax" },
-            total_sales: { $sum: "$total_sales" },
-            total_sales_with_tax: { $sum: "$total_sales_with_tax" },
-            total_units: { $sum: "$total_units" },
-            total_return_amount: { $sum: "$total_return_amount" },
-            fba_fees: { $sum: "$fba_fees" },
-            promotional_rebates: { $sum: "$promotional_rebates" },
-            quantity: { $sum: "$quantity" },
-            refund_quantity: { $sum: "$refund_quantity" },
-            selling_fees: { $sum: "$selling_fees" },
-            spend: { $sum: "$spend" },
-            product_cogs: { $sum: "$product_cogs" },
-            cogs: { $sum: "$cogs" },
-            cm1: { $sum: "$cm1" },
-            heads_cm2: { $sum: "$heads_cm2" },
-            cm2: { $sum: "$cm2" },
-            heads_cm3: { $sum: "$heads_cm3" },
-            cm3: { $sum: "$cm3" }
-          }
-        }
-      ];
+    // Helper function to sum data
+    const sumData = (filteredData) => {
+      return filteredData.reduce((acc, item) => {
+        acc.ad_cost += Number(item.ad_cost) || 0;
+        acc.deal_fee += Number(item.deal_fee) || 0;
+        acc.fba_inventory_fee += Number(item.fba_inventory_fee) || 0;
+        acc.fba_reimbursement += Number(item.fba_reimbursement) || 0;
+        acc.liquidations += Number(item.liquidations) || 0;
+        acc.net_sales += Number(item.net_sales) || 0;
+        acc.net_sales_with_tax += Number(item.net_sales_with_tax) || 0;
+        acc.other_marketing_expenses += Number(item.other_marketing_expenses) || 0;
+        acc.storage_fee += Number(item.storage_fee) || 0;
+        acc.total_return_with_tax += Number(item.total_return_with_tax) || 0;
+        acc.total_sales += Number(item.total_sales) || 0;
+        acc.total_sales_with_tax += Number(item.total_sales_with_tax) || 0;
+        acc.total_units += Number(item.total_units) || 0;
+        acc.total_return_amount += Number(item.total_return_amount) || 0;
+        acc.fba_fees += Number(item.fba_fees) || 0;
+        acc.promotional_rebates += Number(item.promotional_rebates) || 0;
+        acc.quantity += Number(item.quantity) || 0;
+        acc.refund_quantity += Number(item.refund_quantity) || 0;
+        acc.selling_fees += Number(item.selling_fees) || 0;
+        acc.spend += Number(item.spend) || 0;
+        acc.product_cogs += Number(item.product_cogs) || 0;
+        acc.cogs += Number(item.cogs) || 0;
+        acc.cm1 += Number(item.cm1) || 0;
+        acc.heads_cm2 += Number(item.heads_cm2) || 0;
+        acc.cm2 += Number(item.cm2) || 0;
+        acc.heads_cm3 += Number(item.heads_cm3) || 0;
+        acc.cm3 += Number(item.cm3) || 0;
+        return acc;
+      }, {
+        ad_cost: 0,
+        deal_fee: 0,
+        fba_inventory_fee: 0,
+        fba_reimbursement: 0,
+        liquidations: 0,
+        net_sales: 0,
+        net_sales_with_tax: 0,
+        other_marketing_expenses: 0,
+        storage_fee: 0,
+        total_return_with_tax: 0,
+        total_sales: 0,
+        total_sales_with_tax: 0,
+        total_units: 0,
+        total_return_amount: 0,
+        fba_fees: 0,
+        promotional_rebates: 0,
+        quantity: 0,
+        refund_quantity: 0,
+        selling_fees: 0,
+        spend: 0,
+        product_cogs: 0,
+        cogs: 0,
+        cm1: 0,
+        heads_cm2: 0,
+        cm2: 0,
+        heads_cm3: 0,
+        cm3: 0
+      });
     };
 
     let currentPeriodData = null;
@@ -459,49 +415,81 @@ exports.getPnlExecutiveData = async (req, res) => {
     let comparison = null;
 
     // Get current period data
-    const currentPeriodPipeline = createAggregationPipeline(filter);
-    const currentPeriodResult = await Pnl.aggregate(currentPeriodPipeline).allowDiskUse(true);
-    currentPeriodData = currentPeriodResult.length > 0 ? currentPeriodResult[0] : {};
+    let currentFilteredData = pnlData.filter(item => {
+      // Basic filters
+      if (sku && item.sku !== sku) return false;
+      if (category && item.product_category !== category) return false;
+      if (productName && item.product_name !== productName) return false;
+      if (country && item.country !== country) return false;
+      if (platform && item.platform !== platform) return false;
+
+      // Date filter
+      if (yearMonthFilter.length > 0 && !yearMonthFilter.includes(item.year_month)) return false;
+
+      // CM3 type filter
+      if (cm3Type) {
+        switch (cm3Type) {
+          case 'gainer':
+            if (item.cm3 < 0) return false;
+            break;
+          case 'drainer':
+            if (item.cm3 >= 0) return false;
+            break;
+          case 'all':
+            // No filter
+            break;
+        }
+      }
+
+      return true;
+    });
+
+    currentPeriodData = sumData(currentFilteredData);
 
     // Always get previous period data for comparison
     if (previousPeriodFilter.length > 0) {
-      const previousFilter = { ...filter };
-      previousFilter.year_month = { $in: previousPeriodFilter };
+      let previousFilteredData = pnlData.filter(item => {
+        // Basic filters
+        if (sku && item.sku !== sku) return false;
+        if (category && item.product_category !== category) return false;
+        if (productName && item.product_name !== productName) return false;
+        if (country && item.country !== country) return false;
+        if (platform && item.platform !== platform) return false;
 
-      const previousPeriodPipeline = createAggregationPipeline(previousFilter);
-      const previousPeriodResult = await Pnl.aggregate(previousPeriodPipeline).allowDiskUse(true);
-      previousPeriodData = previousPeriodResult.length > 0 ? previousPeriodResult[0] : {};
+        // Date filter for previous period
+        if (!previousPeriodFilter.includes(item.year_month)) return false;
+
+        // CM3 type filter
+        if (cm3Type) {
+          switch (cm3Type) {
+            case 'gainer':
+              if (item.cm3 < 0) return false;
+              break;
+            case 'drainer':
+              if (item.cm3 >= 0) return false;
+              break;
+            case 'all':
+              // No filter
+              break;
+          }
+        }
+
+        return true;
+      });
+
+      previousPeriodData = sumData(previousFilteredData);
 
       // Calculate comparison metrics
       const calculatePercentChange = (current, previous) => {
         if (!previous || previous === 0) return "N/A";
         const diff = ((current - previous) / previous) * 100;
-        return (diff >= 0 ? diff.toFixed(2)  : diff.toFixed(2));
-        //return (diff >= 0 ? diff.toFixed(2) + "% Gain" : diff.toFixed(2) + "% Loss");
+        return (diff >= 0 ? diff.toFixed(2) : diff.toFixed(2));
       };
 
       comparison = {
-
-          cm1_change: calculatePercentChange(currentPeriodData.cm1, previousPeriodData.cm1),
-          cm2_change: calculatePercentChange(currentPeriodData.cm2, previousPeriodData.cm2),
-          cm3_change: calculatePercentChange(currentPeriodData.cm3, previousPeriodData.cm3),
-        // currentPeriod: {
-        //   period: currentPeriodLabel,
-        //   data: currentPeriodData
-        // },
-        // previousPeriod: {
-        //   period: previousPeriodLabel,
-        //   data: previousPeriodData
-        // },
-        // changes: {
-        //   //net_sales_change: calculatePercentChange(currentPeriodData.net_sales, previousPeriodData.net_sales),
-        //   //total_sales_change: calculatePercentChange(currentPeriodData.total_sales, previousPeriodData.total_sales),
-        //   cm1_change: calculatePercentChange(currentPeriodData.cm1, previousPeriodData.cm1),
-        //   cm2_change: calculatePercentChange(currentPeriodData.cm2, previousPeriodData.cm2),
-        //   cm3_change: calculatePercentChange(currentPeriodData.cm3, previousPeriodData.cm3),
-        //  // ad_cost_change: calculatePercentChange(currentPeriodData.ad_cost, previousPeriodData.ad_cost),
-        //   //fba_fees_change: calculatePercentChange(currentPeriodData.fba_fees, previousPeriodData.fba_fees)
-        // }
+        cm1_change: calculatePercentChange(currentPeriodData.cm1, previousPeriodData.cm1),
+        cm2_change: calculatePercentChange(currentPeriodData.cm2, previousPeriodData.cm2),
+        cm3_change: calculatePercentChange(currentPeriodData.cm3, previousPeriodData.cm3),
       };
     }
 
@@ -530,75 +518,39 @@ exports.getPnlDropdownData = async (req, res) => {
     const { databaseName } = req.params;
     const { country, platform } = req.query;
 
-    // Create dynamic connection to the specified database
-    console.log('Database name for PNL Dropdown data:', databaseName);
-
-    // More flexible database name replacement
-    let dynamicUri = process.env.MONGODB_URI;
-    if (dynamicUri.includes('/main_db?')) {
-      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
-    } else if (dynamicUri.includes('/main_db/')) {
-      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
-    } else {
-      // If no main_db found, try to replace the last database name in the URI
-      const uriParts = dynamicUri.split('/');
-      if (uriParts.length > 3) {
-        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
-        dynamicUri = uriParts.join('/');
-      }
-    }
-
-    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
-    const dynamicConnection = mongoose.createConnection(dynamicUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-
-    // Define temporary model
-    const PnlSchema = new mongoose.Schema({}, { strict: false });
-    const Pnl = dynamicConnection.model("Pnl", PnlSchema, "pnl");
-
-    // Build match filter based on country and platform if provided
-    const matchFilter = {};
+    // Filter data if country or platform provided
+    let filteredData = pnlData;
     if (country && country.trim() !== '') {
-      matchFilter.country = country;
+      filteredData = filteredData.filter(item => item.country === country);
     }
     if (platform && platform.trim() !== '') {
-      matchFilter.platform = platform;
+      filteredData = filteredData.filter(item => item.platform === platform);
     }
 
-    // Aggregation pipeline to get distinct values
-    const aggregationPipeline = [];
+    // Get distinct values using Set
+    const skuSet = new Set();
+    const categorySet = new Set();
+    const productNameSet = new Set();
+    const countrySet = new Set();
+    const platformSet = new Set();
 
-    if (Object.keys(matchFilter).length > 0) {
-      aggregationPipeline.push({ $match: matchFilter });
-    }
-
-    aggregationPipeline.push({
-      $group: {
-        _id: null,
-        skuList: { $addToSet: "$sku" },
-        categoryList: { $addToSet: "$product_category" },
-        productNameList: { $addToSet: "$product_name" },
-        countryList: { $addToSet: "$country" },
-        platformList: { $addToSet: "$platform" }
-      }
+    filteredData.forEach(item => {
+      skuSet.add(item.sku);
+      categorySet.add(item.product_category);
+      productNameSet.add(item.product_name);
+      countrySet.add(item.country);
+      platformSet.add(item.platform);
     });
 
-    aggregationPipeline.push({
-      $project: {
-        _id: 0,
-        skuList: 1,
-        categoryList: 1,
-        productNameList: 1,
-        countryList: 1,
-        platformList: 1
-      }
-    });
+    const dropdownData = {
+      skuList: Array.from(skuSet),
+      categoryList: Array.from(categorySet),
+      productNameList: Array.from(productNameSet),
+      countryList: Array.from(countrySet),
+      platformList: Array.from(platformSet)
+    };
 
-    const dropdownData = await Pnl.aggregate(aggregationPipeline).allowDiskUse(true);
-
-    if (dropdownData.length === 0) {
+    if (dropdownData.skuList.length === 0) {
       return res.json({
         success: false,
         message: 'No data found matching the provided filters',
@@ -609,7 +561,7 @@ exports.getPnlDropdownData = async (req, res) => {
     res.json({
       success: true,
       message: 'PNL Dropdown data retrieved successfully',
-      data: dropdownData[0]
+      data: dropdownData
     });
 
   } catch (error) {

@@ -1,134 +1,74 @@
-const mongoose = require('mongoose');
-const moment = require('moment');
+const inventoryData = require('../data_source/All_Geographies_Inventory.json');
 
 exports.getInventoryExecutiveData = async (req, res) => {
   try {
     const { databaseName } = req.params;
+    const { country, platform } = req.query;
 
-    // Create dynamic connection to the specified database
-    console.log('Database name for Inventory Executive data:', databaseName);
+    const filter = {};
+    if (country) filter.country = country.toLowerCase();
+    if (platform) filter.platform = platform.toLowerCase();
 
-    // More flexible database name replacement
-    let dynamicUri = process.env.MONGODB_URI;
-    if (dynamicUri.includes('/main_db?')) {
-      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
-    } else if (dynamicUri.includes('/main_db/')) {
-      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
-    } else {
-      // If no main_db found, try to replace the last database name in the URI
-      const uriParts = dynamicUri.split('/');
-      if (uriParts.length > 3) {
-        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
-        dynamicUri = uriParts.join('/');
-      }
-    }
-
-    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
-    const dynamicConnection = mongoose.createConnection(dynamicUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+    // Filter data
+    let filteredData = inventoryData.filter(item => {
+      return (!filter.country || item.country.toLowerCase().includes(filter.country)) &&
+             (!filter.platform || item.platform.toLowerCase().includes(filter.platform));
     });
 
-    // Define temporary model
-    const InventorySchema = new mongoose.Schema({}, { strict: false });
-    const Inventory = dynamicConnection.model("Inventory", InventorySchema, "inventory");
+    // Aggregate
+    let agg = {
+      platform: filteredData.length > 0 ? filteredData[0].platform : '',
+      estimated_storage_cost_next_month: 0,
+      DOS_2: 0,
+      afn_warehouse_quantity: 0,
+      afn_fulfillable_quantity: 0,
+      afn_unsellable_quantity: 0,
+      fctransfer: 0,
+      customer_reserved: 0,
+      fc_processing: 0,
+      inv_age_0_to_90_days: 0,
+      inv_age_91_to_270_days: 0,
+      instock_rate_percent: 0,
+      active_sku_out_of_stock_count: 0
+    };
 
-    // Build filter object (optional: add filters if needed)
-    const { country, platform } = req.query;
-    const filter = {};
-    if (country) filter.country = { $regex: country, $options: 'i' };
-    if (platform) filter.platform = { $regex: platform, $options: 'i' };
-
-    // Aggregation pipeline to sum required fields and calculate active sku count
-    const aggregationPipeline = [
-      { $match: filter },
-      {
-        $group: {
-          _id: null,
-          platform: { $first: "$platform" },
-          estimated_storage_cost_next_month: { $sum: "$estimated_storage_cost_next_month" },
-          DOS_2: { $avg: "$dos_2" },
-          afn_warehouse_quantity: { $sum: "$afn_warehouse_quantity" },
-          afn_fulfillable_quantity: { $sum: "$afn_fulfillable_quantity" },
-          afn_unsellable_quantity: { $sum: "$afn_unsellable_quantity" },
-          fctransfer: { $sum: "$fc_transfer" },
-          customer_reserved: { $sum: "$customer_reserved" },
-          fc_processing: { $sum: "$fc_processing" },
-          inv_age_0_to_90_days: {
-            $sum: {
-              $add: [
-                "$inv_age_0_to_30_days",
-                "$inv_age_31_to_60_days",
-                "$inv_age_61_to_90_days"
-              ]
-            }
-          },
-          inv_age_91_to_270_days: {
-            $sum: {
-              $add: [
-                "$inv_age_91_to_180_days",
-                "$inv_age_181_to_270_days"
-              ]
-            }
-          },
-          instock_rate_percent: { $avg: "$instock_rate_percent" },
-          active_sku_out_of_stock_count: {
-            $sum: {
-              $cond: [
-                { $and: [
-                    { $eq: ["$stock_status", "Understock"] },
-                    { $eq: ["$dos_2", 0] }
-                  ] },
-                1,
-                0
-              ]
-            }
-          }
-        }
-      },
-      {
-        $addFields: {
-          estimated_storage_cost_previous_month: {
-            $cond: [
-              { $eq: ["$platform", "amazon"] },
-              2506,
-              {
-                $cond: [
-                  { $eq: ["$platform", "shopify"] },
-                  3078,
-                  0
-                ]
-              }
-            ]
-          }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          estimated_storage_cost_next_month: 1,
-          estimated_storage_cost_previous_month: 1,
-          DOS_2: 1,
-          afn_warehouse_quantity: 1,
-          afn_fulfillable_quantity: 1,
-          afn_unsellable_quantity: 1,
-          fctransfer: 1,
-          customer_reserved: 1,
-          fc_processing: 1,
-          inv_age_0_to_90_days: 1,
-          inv_age_91_to_270_days: 1,
-          instock_rate_percent: 1,
-          active_sku_out_of_stock_count: 1
-        }
+    let count = 0;
+    filteredData.forEach(item => {
+      agg.estimated_storage_cost_next_month += Number(item.estimated_storage_cost_next_month) || 0;
+      agg.DOS_2 += Number(item.dos_2) || 0;
+      agg.afn_warehouse_quantity += Number(item.afn_warehouse_quantity) || 0;
+      agg.afn_fulfillable_quantity += Number(item.afn_fulfillable_quantity) || 0;
+      agg.afn_unsellable_quantity += Number(item.afn_unsellable_quantity) || 0;
+      agg.fctransfer += Number(item.fc_transfer) || 0;
+      agg.customer_reserved += Number(item.customer_reserved) || 0;
+      agg.fc_processing += Number(item.fc_processing) || 0;
+      agg.inv_age_0_to_90_days += (Number(item.inv_age_0_to_30_days) || 0) + (Number(item.inv_age_31_to_60_days) || 0) + (Number(item.inv_age_61_to_90_days) || 0);
+      agg.inv_age_91_to_270_days += (Number(item.inv_age_91_to_180_days) || 0) + (Number(item.inv_age_181_to_270_days) || 0);
+      agg.instock_rate_percent += Number(item.instock_rate_percent) || 0;
+      if (item.stock_status === "Understock" && item.dos_2 === 0) {
+        agg.active_sku_out_of_stock_count += 1;
       }
-    ];
+      count++;
+    });
 
-    const inventoryExecutiveData = await Inventory.aggregate(aggregationPipeline).allowDiskUse(true);
+    if (count > 0) {
+      agg.DOS_2 /= count;
+      agg.instock_rate_percent /= count;
+    }
+
+    // Add estimated_storage_cost_previous_month
+    if (agg.platform === "amazon") {
+      agg.estimated_storage_cost_previous_month = 2506;
+    } else if (agg.platform === "shopify") {
+      agg.estimated_storage_cost_previous_month = 3078;
+    } else {
+      agg.estimated_storage_cost_previous_month = 0;
+    }
 
     res.json({
       success: true,
       message: 'Inventory Executive data retrieved successfully',
-      data: inventoryExecutiveData.length > 0 ? inventoryExecutiveData[0] : {}
+      data: agg
     });
 
   } catch (error) {

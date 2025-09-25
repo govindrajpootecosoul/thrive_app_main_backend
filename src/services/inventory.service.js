@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const inventoryData = require('../data_source/All_Geographies_Inventory.json');
 
 // Helper function to calculate in-stock rate
 const calculateInStockRate = (data) => {
@@ -24,34 +24,6 @@ exports.getInventoryByDatabase = async (req, res) => {
     const { databaseName } = req.params;
     const { sku, category, product, country, platform } = req.query;
 
-    // Create dynamic connection to the specified database
-    console.log('Database name:', databaseName);
-
-    // More flexible database name replacement
-    let dynamicUri = process.env.MONGODB_URI;
-    if (dynamicUri.includes('/main_db?')) {
-      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
-    } else if (dynamicUri.includes('/main_db/')) {
-      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
-    } else {
-      // If no main_db found, try to replace the last database name in the URI
-      const uriParts = dynamicUri.split('/');
-      if (uriParts.length > 3) {
-        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
-        dynamicUri = uriParts.join('/');
-      }
-    }
-
-    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
-    const dynamicConnection = mongoose.createConnection(dynamicUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-
-    // Define temporary model
-    const InventorySchema = new mongoose.Schema({}, { strict: false });
-    const Inventory = dynamicConnection.model("Inventory", InventorySchema, "inventory");
-
     // Build filter object based on query params
     const filter = {};
     if (sku) filter.sku = sku;
@@ -60,17 +32,23 @@ exports.getInventoryByDatabase = async (req, res) => {
     if (country) filter.country = country;
     if (platform) filter.platform = platform;
 
-    // Get filtered inventory data
-    const inventoryData = await Inventory.find(filter);
+    // Filter data
+    let filteredData = inventoryData.filter(item => {
+      return (!filter.sku || item.sku === filter.sku) &&
+             (!filter.product_category || item.product_category === filter.product_category) &&
+             (!filter.product_name || item.product_name === filter.product_name) &&
+             (!filter.country || item.country === filter.country) &&
+             (!filter.platform || item.platform === filter.platform);
+    });
 
-    console.log('Total inventory items found:', inventoryData.length);
+    console.log('Total inventory items found:', filteredData.length);
 
     // Calculate totals
     let totalQuantity = 0;
     let totalValue = 0;
-    let totalItems = inventoryData.length;
+    let totalItems = filteredData.length;
 
-    inventoryData.forEach(item => {
+    filteredData.forEach(item => {
       totalQuantity += Number(item.quantity) || 0;
       totalValue += Number(item.total_value || item.value) || 0;
     });
@@ -85,7 +63,7 @@ exports.getInventoryByDatabase = async (req, res) => {
 //totalQuantity,
 //totalValue,
 
-        inventoryData}
+        inventoryData: filteredData}
     });
 
   } catch (error) {
@@ -99,51 +77,34 @@ exports.getInventoryDropdownData = async (req, res) => {
     const { databaseName } = req.params;
     const { platform, country } = req.query;
 
-    // Create dynamic connection to the specified database
-    console.log('Database name for inventory dropdown:', databaseName);
-
-    // More flexible database name replacement
-    let dynamicUri = process.env.MONGODB_URI;
-    if (dynamicUri.includes('/main_db?')) {
-      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
-    } else if (dynamicUri.includes('/main_db/')) {
-      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
-    } else {
-      // If no main_db found, try to replace the last database name in the URI
-      const uriParts = dynamicUri.split('/');
-      if (uriParts.length > 3) {
-        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
-        dynamicUri = uriParts.join('/');
-      }
-    }
-
-    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
-    const dynamicConnection = mongoose.createConnection(dynamicUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-
-    // Define temporary model
-    const InventorySchema = new mongoose.Schema({}, { strict: false });
-    const Inventory = dynamicConnection.model("Inventory", InventorySchema, "inventory");
-
     // Build filter object for platform and country
     const filter = {};
-    if (platform) filter.platform = { $regex: platform, $options: 'i' };
-    if (country) filter.country = { $regex: country, $options: 'i' };
+    if (platform) filter.platform = platform.toLowerCase();
+    if (country) filter.country = country.toLowerCase();
 
-    // Get distinct values for dropdowns
-    const skuList = await Inventory.distinct('sku', filter);
-    const categoryList = await Inventory.distinct('product_category', filter);
-    const productNameList = await Inventory.distinct('product_name', filter);
+    // Filter data
+    let filteredData = inventoryData.filter(item => {
+      return (!filter.platform || item.platform.toLowerCase().includes(filter.platform)) &&
+             (!filter.country || item.country.toLowerCase().includes(filter.country));
+    });
+
+    // Get distinct values
+    const skuSet = new Set();
+    const categorySet = new Set();
+    const productNameSet = new Set();
+    filteredData.forEach(item => {
+      if (item.sku) skuSet.add(item.sku);
+      if (item.product_category) categorySet.add(item.product_category);
+      if (item.product_name) productNameSet.add(item.product_name);
+    });
 
     res.json({
       success: true,
       message: 'Inventory dropdown data retrieved successfully',
       data: {
-        skuList: skuList.filter(sku => sku), // Filter out null/undefined
-        categoryList: categoryList.filter(category => category), // Filter out null/undefined
-        productNameList: productNameList.filter(product => product) // Filter out null/undefined
+        skuList: Array.from(skuSet),
+        categoryList: Array.from(categorySet),
+        productNameList: Array.from(productNameSet)
       }
     });
 
@@ -158,51 +119,25 @@ exports.getInventoryOverstockData = async (req, res) => {
     const { databaseName } = req.params;
     const { country, platform } = req.query;
 
-    // Create dynamic connection to the specified database
-    console.log('Database name for inventory overstock:', databaseName);
+    // Build filter
+    const filter = {};
+    if (platform) filter.platform = platform.toLowerCase();
+    if (country) filter.country = country.toLowerCase();
 
-    // More flexible database name replacement
-    let dynamicUri = process.env.MONGODB_URI;
-    if (dynamicUri.includes('/main_db?')) {
-      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
-    } else if (dynamicUri.includes('/main_db/')) {
-      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
-    } else {
-      // If no main_db found, try to replace the last database name in the URI
-      const uriParts = dynamicUri.split('/');
-      if (uriParts.length > 3) {
-        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
-        dynamicUri = uriParts.join('/');
-      }
-    }
-
-    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
-    const dynamicConnection = mongoose.createConnection(dynamicUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+    // Filter data
+    let filteredData = inventoryData.filter(item => {
+      return item.stock_status === "Overstock" &&
+             item.dos_2 >= 90 &&
+             (!filter.platform || item.platform.toLowerCase().includes(filter.platform)) &&
+             (!filter.country || item.country.toLowerCase().includes(filter.country));
     });
 
-    // Define temporary model
-    const InventorySchema = new mongoose.Schema({}, { strict: false });
-    const Inventory = dynamicConnection.model("Inventory", InventorySchema, "inventory");
-
-    // Build filter object for platform and country
-    const filter = {
-      stock_status: "Overstock",
-      dos_2: { $gte: 90 }
-    };
-    if (platform) filter.platform = { $regex: platform, $options: 'i' };
-    if (country) filter.country = { $regex: country, $options: 'i' };
-
-    // Get filtered inventory data
-    const inventoryData = await Inventory.find(filter);
-
-    console.log('Total overstock inventory items found:', inventoryData.length);
+    console.log('Total overstock inventory items found:', filteredData.length);
 
     res.json({
       success: true,
       message: 'Inventory overstock data retrieved successfully',
-      data: {inventoryData}
+      data: {inventoryData: filteredData}
     });
 
   } catch (error) {
@@ -216,51 +151,25 @@ exports.getInventoryUnderstockData = async (req, res) => {
     const { databaseName } = req.params;
     const { country, platform } = req.query;
 
-    // Create dynamic connection to the specified database
-    console.log('Database name for inventory understock:', databaseName);
+    // Build filter
+    const filter = {};
+    if (platform) filter.platform = platform.toLowerCase();
+    if (country) filter.country = country.toLowerCase();
 
-    // More flexible database name replacement
-    let dynamicUri = process.env.MONGODB_URI;
-    if (dynamicUri.includes('/main_db?')) {
-      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
-    } else if (dynamicUri.includes('/main_db/')) {
-      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
-    } else {
-      // If no main_db found, try to replace the last database name in the URI
-      const uriParts = dynamicUri.split('/');
-      if (uriParts.length > 3) {
-        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
-        dynamicUri = uriParts.join('/');
-      }
-    }
-
-    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
-    const dynamicConnection = mongoose.createConnection(dynamicUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+    // Filter data
+    let filteredData = inventoryData.filter(item => {
+      return item.stock_status === "Understock" &&
+             item.dos_2 <= 30 &&
+             (!filter.platform || item.platform.toLowerCase().includes(filter.platform)) &&
+             (!filter.country || item.country.toLowerCase().includes(filter.country));
     });
 
-    // Define temporary model
-    const InventorySchema = new mongoose.Schema({}, { strict: false });
-    const Inventory = dynamicConnection.model("Inventory", InventorySchema, "inventory");
-
-    // Build filter object for platform and country
-    const filter = {
-      stock_status: "Understock",
-      dos_2: { $lte: 30 }
-    };
-    if (platform) filter.platform = { $regex: platform, $options: 'i' };
-    if (country) filter.country = { $regex: country, $options: 'i' };
-
-    // Get filtered inventory data
-    const inventoryData = await Inventory.find(filter);
-
-    console.log('Total understock inventory items found:', inventoryData.length);
+    console.log('Total understock inventory items found:', filteredData.length);
 
     res.json({
       success: true,
       message: 'Inventory understock data retrieved successfully',
-      data: {inventoryData}
+      data: {inventoryData: filteredData}
     });
 
   } catch (error) {
@@ -274,51 +183,25 @@ exports.getInventoryActiveSKUOutOfStockData = async (req, res) => {
     const { databaseName } = req.params;
     const { country, platform } = req.query;
 
-    // Create dynamic connection to the specified database
-    console.log('Database name for inventory activeSKUoutofstock:', databaseName);
+    // Build filter
+    const filter = {};
+    if (platform) filter.platform = platform.toLowerCase();
+    if (country) filter.country = country.toLowerCase();
 
-    // More flexible database name replacement
-    let dynamicUri = process.env.MONGODB_URI;
-    if (dynamicUri.includes('/main_db?')) {
-      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
-    } else if (dynamicUri.includes('/main_db/')) {
-      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
-    } else {
-      // If no main_db found, try to replace the last database name in the URI
-      const uriParts = dynamicUri.split('/');
-      if (uriParts.length > 3) {
-        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
-        dynamicUri = uriParts.join('/');
-      }
-    }
-
-    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
-    const dynamicConnection = mongoose.createConnection(dynamicUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+    // Filter data
+    let filteredData = inventoryData.filter(item => {
+      return item.stock_status === "Understock" &&
+             item.dos_2 === 0 &&
+             (!filter.platform || item.platform.toLowerCase().includes(filter.platform)) &&
+             (!filter.country || item.country.toLowerCase().includes(filter.country));
     });
 
-    // Define temporary model
-    const InventorySchema = new mongoose.Schema({}, { strict: false });
-    const Inventory = dynamicConnection.model("Inventory", InventorySchema, "inventory");
-
-    // Build filter object for platform and country
-    const filter = {
-      stock_status: "Understock",
-      dos_2: 0
-    };
-    if (platform) filter.platform = { $regex: platform, $options: 'i' };
-    if (country) filter.country = { $regex: country, $options: 'i' };
-
-    // Get filtered inventory data
-    const inventoryData = await Inventory.find(filter);
-
-    console.log('Total activeSKUoutofstock inventory items found:', inventoryData.length);
+    console.log('Total activeSKUoutofstock inventory items found:', filteredData.length);
 
     res.json({
       success: true,
       message: 'Inventory activeSKUoutofstock data retrieved successfully',
-      data: {inventoryData}
+      data: {inventoryData: filteredData}
     });
 
   } catch (error) {
@@ -331,53 +214,17 @@ exports.getInventoryCountSummary = async (req, res) => {
   try {
     const { databaseName } = req.params;
 
-    // Create dynamic connection to the specified database
-    console.log('Database name for inventory count summary:', databaseName);
-
-    // More flexible database name replacement
-    let dynamicUri = process.env.MONGODB_URI;
-    if (dynamicUri.includes('/main_db?')) {
-      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
-    } else if (dynamicUri.includes('/main_db/')) {
-      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
-    } else {
-      // If no main_db found, try to replace the last database name in the URI
-      const uriParts = dynamicUri.split('/');
-      if (uriParts.length > 3) {
-        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
-        dynamicUri = uriParts.join('/');
+    // Group by country and platform
+    const summary = {};
+    inventoryData.forEach(item => {
+      const key = `${item.country}_${item.platform}`;
+      if (!summary[key]) {
+        summary[key] = { country: item.country, platform: item.platform, count: 0 };
       }
-    }
-
-    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
-    const dynamicConnection = mongoose.createConnection(dynamicUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+      summary[key].count++;
     });
 
-    // Define temporary model
-    const InventorySchema = new mongoose.Schema({}, { strict: false });
-    const Inventory = dynamicConnection.model("Inventory", InventorySchema, "inventory");
-
-    // Aggregate count grouped by country and platform
-    const aggregationPipeline = [
-      {
-        $group: {
-          _id: { country: "$country", platform: "$platform" },
-          count: { $sum: 1 }
-        }
-      },
-      {
-        $project: {
-          _id: 0,
-          country: "$_id.country",
-          platform: "$_id.platform",
-          count: 1
-        }
-      }
-    ];
-
-    const countSummary = await Inventory.aggregate(aggregationPipeline).allowDiskUse(true);
+    const countSummary = Object.values(summary);
 
     console.log('Inventory count summary:', countSummary.length);
 
@@ -398,54 +245,39 @@ exports.getInventoryStockStatusCounts = async (req, res) => {
     const { databaseName } = req.params;
     const { country, platform } = req.query;
 
-    // Create dynamic connection to the specified database
-    console.log('Database name for inventory stock status counts:', databaseName);
+    // Build base filter
+    const baseFilter = {};
+    if (platform) baseFilter.platform = platform.toLowerCase();
+    if (country) baseFilter.country = country.toLowerCase();
 
-    // More flexible database name replacement
-    let dynamicUri = process.env.MONGODB_URI;
-    if (dynamicUri.includes('/main_db?')) {
-      dynamicUri = dynamicUri.replace('/main_db?', `/${databaseName}?`);
-    } else if (dynamicUri.includes('/main_db/')) {
-      dynamicUri = dynamicUri.replace('/main_db/', `/${databaseName}/`);
-    } else {
-      // If no main_db found, try to replace the last database name in the URI
-      const uriParts = dynamicUri.split('/');
-      if (uriParts.length > 3) {
-        uriParts[uriParts.length - 2] = databaseName; // Replace the database name part
-        dynamicUri = uriParts.join('/');
-      }
-    }
-
-    console.log('Connecting to database:', dynamicUri.replace(/:[^:]*@/, ':***@')); // Log without password
-    const dynamicConnection = mongoose.createConnection(dynamicUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+    // Filter all data for instockrate
+    let allData = inventoryData.filter(item => {
+      return (!baseFilter.platform || item.platform.toLowerCase().includes(baseFilter.platform)) &&
+             (!baseFilter.country || item.country.toLowerCase().includes(baseFilter.country));
     });
 
-    // Define temporary model
-    const InventorySchema = new mongoose.Schema({}, { strict: false });
-    const Inventory = dynamicConnection.model("Inventory", InventorySchema, "inventory");
+    const instockrate = calculateInStockRate(allData);
 
-    // Build base filter for country and platform
-    const baseFilter = {};
-    if (platform) baseFilter.platform = { $regex: platform, $options: 'i' };
-    if (country) baseFilter.country = { $regex: country, $options: 'i' };
+    // Count overstock
+    const overstockCount = inventoryData.filter(item => {
+      return item.stock_status === "Overstock" && item.dos_2 >= 90 &&
+             (!baseFilter.platform || item.platform.toLowerCase().includes(baseFilter.platform)) &&
+             (!baseFilter.country || item.country.toLowerCase().includes(baseFilter.country));
+    }).length;
 
-    // Get all inventory data for instockrate calculation
-    const allInventoryData = await Inventory.find(baseFilter);
-    const instockrate = calculateInStockRate(allInventoryData);
+    // Count understock
+    const understockCount = inventoryData.filter(item => {
+      return item.stock_status === "Understock" && item.dos_2 <= 30 &&
+             (!baseFilter.platform || item.platform.toLowerCase().includes(baseFilter.platform)) &&
+             (!baseFilter.country || item.country.toLowerCase().includes(baseFilter.country));
+    }).length;
 
-    // Count overstock: stock_status: "Overstock", dos_2: { $gte: 90 }
-    const overstockFilter = { ...baseFilter, stock_status: "Overstock", dos_2: { $gte: 90 } };
-    const overstockCount = await Inventory.countDocuments(overstockFilter);
-
-    // Count understock: stock_status: "Understock", dos_2: { $lte: 30 }
-    const understockFilter = { ...baseFilter, stock_status: "Understock", dos_2: { $lte: 30 } };
-    const understockCount = await Inventory.countDocuments(understockFilter);
-
-    // Count active SKU out of stock: stock_status: "Understock", dos_2: 0
-    const activeSKUOutOfStockFilter = { ...baseFilter, stock_status: "Understock", dos_2: 0 };
-    const activeSKUOutOfStockCount = await Inventory.countDocuments(activeSKUOutOfStockFilter);
+    // Count active SKU out of stock
+    const activeSKUOutOfStockCount = inventoryData.filter(item => {
+      return item.stock_status === "Understock" && item.dos_2 === 0 &&
+             (!baseFilter.platform || item.platform.toLowerCase().includes(baseFilter.platform)) &&
+             (!baseFilter.country || item.country.toLowerCase().includes(baseFilter.country));
+    }).length;
 
     console.log('Stock status counts:', { overstockCount, understockCount, activeSKUOutOfStockCount, instockrate });
 
@@ -465,4 +297,3 @@ exports.getInventoryStockStatusCounts = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
- 

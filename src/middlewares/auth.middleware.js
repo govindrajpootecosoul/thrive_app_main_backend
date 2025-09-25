@@ -2,6 +2,11 @@ const jwt = require('jsonwebtoken');
 const logger = require('../utils/logger');
 
 const authenticateToken = (req, res, next) => {
+  // Bypass authentication for orders API as per new requirement
+  if (req.path.startsWith('/api/orders')) {
+    return next();
+  }
+
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
