@@ -1,0 +1,32 @@
+[
+    {
+        "client_id": "TH-1753144646395",
+        "country": "DE",
+        "platform": "amazon",
+        "year_month": "2023-12",
+        "purchase_date": "31-Dec-2023",
+        "purchase_hour": "20.0",
+        "purchase_time": "20:39",
+        "order_id": "028-9869049-5885910",
+        "order_status": "Shipped",
+        "sku": "KCA-201169",
+        "asin": "B08L43JZ49",
+        "product_category": "Whey Protein",
+        "product_name": "Kinetica Sports Whey Proteinpulver - Geschmacksneutral | 23g Protein/Portion, 33 Portionen/1kg Packung | Glutenfrei | Optimal für Muskelaufbau & Regeneration | Löst sich gut in Wasser, Milch & Shakes",
+        "aov": "44.99",
+        "orders": "0.0",
+        "gross_sales": "0.0",
+        "net_sales": "0.0",
+        "taxes": "0.0",
+        "quantity": "1.0",
+        "total_sales": "44.99",
+        "item_promotion_discount": "0.0",
+        "ship_promotion_discount": "0.0",
+        "item_price": "44.99",
+        "currency": "EUR",
+        "promotion_ids": "",
+        "pincode_new": "66557",
+        "city": "Illingen",
+        "state": "Saarland"
+    }
+]
