@@ -190,7 +190,7 @@ exports.getAdSalesAdSpendByDatabase = async (req, res) => {
           _id: null,
           totalAdSales: { $sum: { $toDouble: "$ad_sales" } },
           totalAdSpend: { $sum: { $toDouble: "$ad_spend" } },
-          totalRevenue: { $sum: { $toDouble: "$total_revenue" } }
+          totalRevenue: { $sum: { $toDouble: "$total_gross_sales" } }
         }
       }
     ];
@@ -206,7 +206,7 @@ exports.getAdSalesAdSpendByDatabase = async (req, res) => {
           _id: null,
           totalAdSales: { $sum: { $toDouble: "$ad_sales" } },
           totalAdSpend: { $sum: { $toDouble: "$ad_spend" } },
-          totalRevenue: { $sum: { $toDouble: "$total_revenue" } }
+          totalRevenue: { $sum: { $toDouble: "$total_gross_sales" } }
         }
       }
     ];
@@ -220,7 +220,7 @@ exports.getAdSalesAdSpendByDatabase = async (req, res) => {
       const ACOS = totalAdSales > 0 ? (totalAdSpend / totalAdSales) * 100 : 0;
       const TACOS = totalRevenue > 0 ? (totalAdSpend / totalRevenue) * 100 : 0;
       const ROAS = totalAdSpend > 0 ? totalRevenue / totalAdSpend : 0;
-      const organicrevenue = totalRevenue - totalAdSales;
+      const organicrevenue = totalRevenue > 0 ? ((totalRevenue - totalAdSales) / totalRevenue) * 100 : 0;
       return {
         totalAdSales: totalAdSales.toFixed(2),
         totalAdSpend: totalAdSpend.toFixed(2),
