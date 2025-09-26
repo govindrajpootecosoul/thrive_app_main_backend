@@ -127,7 +127,7 @@ exports.getInventoryOverstockData = async (req, res) => {
     // Filter data
     let filteredData = inventoryData.filter(item => {
       return item.stock_status === "Overstock" &&
-             item.dos_2 >= 90 &&
+             Number(item.dos_2) >= 90 &&
              (!filter.platform || item.platform.toLowerCase().includes(filter.platform)) &&
              (!filter.country || item.country.toLowerCase().includes(filter.country));
     });
@@ -159,7 +159,7 @@ exports.getInventoryUnderstockData = async (req, res) => {
     // Filter data
     let filteredData = inventoryData.filter(item => {
       return item.stock_status === "Understock" &&
-             item.dos_2 <= 30 &&
+             Number(item.dos_2) <= 30 &&
              (!filter.platform || item.platform.toLowerCase().includes(filter.platform)) &&
              (!filter.country || item.country.toLowerCase().includes(filter.country));
     });
@@ -191,7 +191,7 @@ exports.getInventoryActiveSKUOutOfStockData = async (req, res) => {
     // Filter data
     let filteredData = inventoryData.filter(item => {
       return item.stock_status === "Understock" &&
-             item.dos_2 === 0 &&
+             Number(item.dos_2) === 0 &&
              (!filter.platform || item.platform.toLowerCase().includes(filter.platform)) &&
              (!filter.country || item.country.toLowerCase().includes(filter.country));
     });
@@ -260,21 +260,21 @@ exports.getInventoryStockStatusCounts = async (req, res) => {
 
     // Count overstock
     const overstockCount = inventoryData.filter(item => {
-      return item.stock_status === "Overstock" && item.dos_2 >= 90 &&
+      return item.stock_status === "Overstock" && Number(item.dos_2) >= 90 &&
              (!baseFilter.platform || item.platform.toLowerCase().includes(baseFilter.platform)) &&
              (!baseFilter.country || item.country.toLowerCase().includes(baseFilter.country));
     }).length;
 
     // Count understock
     const understockCount = inventoryData.filter(item => {
-      return item.stock_status === "Understock" && item.dos_2 <= 30 &&
+      return item.stock_status === "Understock" && Number(item.dos_2) <= 30 &&
              (!baseFilter.platform || item.platform.toLowerCase().includes(baseFilter.platform)) &&
              (!baseFilter.country || item.country.toLowerCase().includes(baseFilter.country));
     }).length;
 
-    // Count active SKU out of stock
+    // Count active SKU out of stock  stock_status
     const activeSKUOutOfStockCount = inventoryData.filter(item => {
-      return item.stock_status === "Understock" && item.dos_2 === 0 &&
+      return item.stock_status === "Understock" && Number(item.dos_2) === 0 &&
              (!baseFilter.platform || item.platform.toLowerCase().includes(baseFilter.platform)) &&
              (!baseFilter.country || item.country.toLowerCase().includes(baseFilter.country));
     }).length;
